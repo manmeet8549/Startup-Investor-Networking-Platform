@@ -1,0 +1,55 @@
+import pg from 'pg';
+import { config } from '../config.js';
+import { logger } from '../utils/logger.js';
+
+const { Pool } = pg;
+
+export const pool = new Pool({
+  connectionString: config.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
+pool.on('error', (err) => {
+  logger.error({ err }, 'Unexpected error on idle PostgreSQL client in pool');
+});
+
+export interface DbHealthResult {
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+export async function checkDatabaseConnection(): Promise<DbHealthResult> {
+  const start = Date.now();
+  try {
+    const res = await pool.query('SELECT 1 AS health_check');
+    const latencyMs = Date.now() - start;
+    if (res.rows.length > 0 && res.rows[0].health_check === 1) {
+      return { ok: true, latencyMs };
+    }
+    return { ok: false, latencyMs, error: 'Unexpected response from database' };
+  } catch (err) {
+    const latencyMs = Date.now() - start;
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    logger.error({ err, latencyMs }, 'Database health check query failed');
+    return { ok: false, latencyMs, error: errorMessage };
+  }
+}
+
+export async function query<T = unknown>(
+  text: string,
+  params?: unknown[]
+): Promise<{ rows: T[]; rowCount: number }> {
+  const start = Date.now();
+  const res = await pool.query(text, params);
+  const duration = Date.now() - start;
+  logger.debug({ text, duration, rows: res.rowCount }, 'Executed SQL query');
+  return { rows: res.rows as T[], rowCount: res.rowCount ?? 0 };
+}
+
+export async function closePool(): Promise<void> {
+  await pool.end();
+}

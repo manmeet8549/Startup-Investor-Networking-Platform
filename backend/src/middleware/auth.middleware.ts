@@ -42,7 +42,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   let decoded: JwtPayload;
   try {
     decoded = jwt.verify(token, config.SUPABASE_JWT_SECRET) as JwtPayload;
-  } catch (err) {
+  } catch {
     return next(new AppError('Invalid or expired authentication token', 401, 'INVALID_TOKEN'));
   }
 

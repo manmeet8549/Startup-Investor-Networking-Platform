@@ -1,47 +1,97 @@
-# Founders Den — Clickable MVP Prototype
+# Founders Den — Startup & Investor Networking Platform
 
-A responsive Next.js + TypeScript + Tailwind CSS prototype covering the public website and all five role-based portals in the supplied MVP scope.
+Founders Den is a startup and investor networking platform connecting founders, student innovators, investors, mentors, and incubators with trust, access-controlled pitch decks, and compatibility matching.
 
-## Included
-- Public landing page, Explore Startups, How It Works, For Founders, For Investors
-- Founder portal: dashboard, startup profile, pitch documents/access requests, investor matches, investors, mentors, incubators/applications, messages, settings
-- Investor portal: dashboard, startup discovery/recommendations, watchlist and notes, pipeline, meeting requests, messages, investment preferences, settings
-- Mentor portal: dashboard, expertise profile, mentorship requests, startups to review, messages, settings
-- Incubator portal: dashboard, program management, application review, startup discovery, messages, settings
-- Admin portal: dashboard, verification queue, users, startup listings, reported content, settings
-- Search and filters, weighted-match explanation, mock connection/access/meeting/application flows, notification popover, role switcher, profile/program forms
-- Responsive layout and demo data
+---
 
-## Run locally
-Requires Node.js 18+.
+## Architecture Overview
+- **/backend**: Node.js 20 + TypeScript, Express, Supabase (PostgreSQL, Auth), pg pool (SSL on), Zod validation, Vitest + Supertest, Pino logging, Helmet security, rate limiting.
+- **/frontend**: Next.js 14 + React 18, Tailwind CSS, TypeScript, typed API client.
+- **/supabase**: Local Supabase stack configuration and SQL migrations (`/supabase/migrations`).
+- **/docs**: Comprehensive API specification (`API.md`) and project progress tracking (`PROGRESS.md`).
 
-```bash
-npm install
-npm run dev
-```
+---
 
-Open http://localhost:3000.
+## Quick Setup (Under 10 Steps)
 
-## Important prototype boundary
-This is a front-end interactive prototype with in-memory sample data. Authentication, file uploads, approval decisions, messaging, and records are simulated in the browser; they are **not persisted** and no credentials are stored. The Supabase client dependency is included as a planned integration point, but no Supabase project or environment keys are configured.
+1. **Clone Repository**
+   ```bash
+   git clone https://github.com/manmeet8549/Startup-Investor-Networking-Platform.git
+   cd Startup-Investor-Networking-Platform
+   ```
 
-## Production integration checklist
-1. Create a Supabase project and configure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-2. Add SQL migrations for profiles, startups, startup_members, pitch_decks, investor_profiles, connections, pitch_requests, mentorship_requests, incubator_programs, incubator_applications, conversations, messages, notifications, and reports.
-3. Enforce Row Level Security and server-side role checks; do not rely on client role selection for authorization.
-4. Use private storage buckets and signed URLs for access-controlled pitch decks. Validate MIME type, file size, ownership, and access approval on the server.
-5. Replace demo actions and arrays with authenticated Supabase queries and mutations.
-6. Add email verification, password reset, admin approval workflow, rate limits, audit logs, and error handling.
-7. Add tests for role boundaries, document access, application states, and messaging permissions.
+2. **Configure Backend Environment**
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+   *Fill in your Supabase URL, Anon Key, Service Role Key, and Database connection string in `backend/.env`.*
 
-## Design direction
-Minimalist, workspace-first SaaS interface; forest-green accent palette; responsive sidebar; distinct role-specific navigation; neutral surfaces and accessible contrast.
+3. **Install Backend Dependencies**
+   ```bash
+   cd backend && npm install
+   ```
 
+4. **Run Backend Test Suite**
+   ```bash
+   npm test
+   ```
+   *Runs 25 automated unit & integration tests covering health checks, environment validation, auth, and admin moderation.*
 
-## Figma redesign
+5. **Start Local Supabase Stack (Optional for Local Development)**
+   ```bash
+   npx supabase start
+   ```
+   *Starts local PostgreSQL (port 54322), Supabase Studio (port 54323), Auth, and Storage.*
 
-A new Figma design file was created from the supplied references, with seven desktop frames: public landing page, startup discovery, founder portal, investor portal, mentor portal, incubator portal, and admin portal.
+6. **Apply Database Migrations**
+   ```bash
+   npx supabase db push
+   ```
+   *Applies migrations located in `supabase/migrations` (creates profiles, roles, verification queue, and RLS policies).*
 
-Open the editable Figma design: https://www.figma.com/design/GfhJYMDRNp16ntsFpwM7EL
+7. **Start Backend API Server**
+   ```bash
+   npm run dev
+   ```
+   *API will run at `http://localhost:5000/api/v1`.*
 
-The visual direction uses editorial monochrome surfaces, large typography, rounded white panels, tactile black pill controls, soft shadows, and a restrained orange accent. The source frontend remains a clickable Next.js demo; backend integrations require Supabase setup.
+8. **Configure and Start Frontend**
+   ```bash
+   cd ../frontend
+   cp .env.example .env.local
+   npm install
+   npm run dev
+   ```
+   *Frontend portal will run at `http://localhost:3000`.*
+
+9. **Verify System Health**
+   Open `http://localhost:5000/api/v1/health` in your browser. You should receive:
+   ```json
+   {
+     "data": {
+       "status": "healthy",
+       "database": "connected",
+       "version": "1.0.0"
+     }
+   }
+   ```
+
+---
+
+## Backend NPM Scripts
+- `npm run dev`: Start development server with file watch (`tsx`)
+- `npm run build`: Compile TypeScript to `dist/`
+- `npm run start`: Run compiled production server
+- `npm test`: Run automated Vitest test suite
+- `npm run lint`: Run ESLint checks
+- `npm run typecheck`: Run TypeScript type-checking without emitting files
+- `npm run format`: Format source files with Prettier
+
+---
+
+## API Conventions & Documentation
+- Base path: `/api/v1`
+- Envelope formats:
+  - Success: `{ "data": ..., "meta": ... }`
+  - Error: `{ "error": { "code": "...", "message": "...", "details": ... } }`
+- Full endpoint specifications are available in [docs/API.md](docs/API.md).

@@ -1,5 +1,6 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { apiClient } from '../lib/api-client';
 import { ArrowDownRight, ArrowRight, Bell, Bookmark, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Clock3, Compass, FileText, Filter, Handshake, HeartHandshake, LayoutDashboard, Lightbulb, LogOut, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings, ShieldCheck, Sparkles, Users, X, MapPin, TrendingUp, CalendarDays, Eye, LockKeyhole, CheckCircle2, CircleDashed, SlidersHorizontal, Upload, Send, UserRound, PanelsTopLeft, GraduationCap, ChartNoAxesCombined, ExternalLink, Inbox, Trash2 } from 'lucide-react';
 
 type Role = 'Public'|'Founder'|'Investor'|'Mentor'|'Incubator'|'Admin';
@@ -32,6 +33,18 @@ function SectionTitle({eyebrow,title,desc,action}:{eyebrow?:string;title:string;
 function EmptyState({title,desc,action}:{title:string;desc:string;action?:React.ReactNode}){return <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-forest"><Inbox size={22}/></div><h3 className="mt-4 font-semibold">{title}</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">{desc}</p>{action&&<div className="mt-5">{action}</div>}</div>}
 
 export default function Home(){
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      apiClient.checkHealth().then((health) => {
+        if (health) {
+          console.log('[Founders Den] Backend API connected:', health);
+        } else {
+          console.warn('[Founders Den] Backend API health check failed. Verify backend is running on port 5000.');
+        }
+      });
+    }
+  }, []);
+
  const [role,setRole]=useState<Role>('Public');const [page,setPage]=useState('Home');const [mobileNav,setMobileNav]=useState(false);const [search,setSearch]=useState('');const [sector,setSector]=useState('All sectors');const [stage,setStage]=useState('All stages');const [location,setLocation]=useState('');const [startups,setStartups]=useState(initialStartups);const [saved,setSaved]=useState<number[]>([1,3]);const [modal,setModal]=useState<{type:string;startup?:Startup;title?:string}|null>(null);const [toast,setToast]=useState('');const [requests,setRequests]=useState<string[]>([]);const [applications,setApplications]=useState<string[]>([]);const [status,setStatus]=useState<Record<string,string>>({'TerraLoop':'Interested','Medora AI':'Meeting Requested'});const [messages,setMessages]=useState([{from:'Northstar Ventures',text:'Hi! We would love to learn more about your pilot results.',time:'10:42 AM'}]);const [messageDraft,setMessageDraft]=useState('');const [newStartup,setNewStartup]=useState({name:'',tagline:'',sector:'AgriTech',stage:'Idea',location:'',ask:'₹10L',description:''});const [notificationsOpen,setNotificationsOpen]=useState(false);const [notes,setNotes]=useState<Record<string,string>>({'Northstar Ventures':'Follow up after pilot results.'});
  const filtered=useMemo(()=>startups.filter(s=>(s.name+' '+s.tagline+' '+s.sector+' '+s.description).toLowerCase().includes(search.toLowerCase())&&(sector==='All sectors'||s.sector===sector)&&(stage==='All stages'||s.stage===stage)&&(!location||s.location.toLowerCase().includes(location.toLowerCase()))),[startups,search,sector,stage,location]);
  const notify=(s:string)=>{setToast(s);setTimeout(()=>setToast(''),2600)};

@@ -32,6 +32,22 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  // Catch malformed JSON syntax error from express.json()
+  if (
+    err instanceof SyntaxError &&
+    'status' in err &&
+    (err as { status: unknown }).status === 400 &&
+    'body' in err
+  ) {
+    res.status(400).json({
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'Malformed JSON payload in request body',
+      },
+    });
+    return;
+  }
+
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
       error: {
@@ -59,7 +75,10 @@ export function errorHandler(
     return;
   }
 
-  logger.error({ err, path: req.path, method: req.method }, 'Unhandled internal server error');
+  logger.error(
+    { err, path: req.path, method: req.method, requestId: (req as any).id },
+    'Unhandled internal server error'
+  );
 
   res.status(500).json({
     error: {

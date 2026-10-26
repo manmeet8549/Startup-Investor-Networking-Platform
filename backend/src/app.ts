@@ -1,5 +1,8 @@
+import crypto from 'node:crypto';
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
+import { rateLimit } from 'express-rate-limit';
 import { pinoHttp } from 'pino-http';
 import { logger } from './utils/logger.js';
 import { healthRouter } from './routes/health.routes.js';
@@ -11,27 +14,58 @@ import { config } from './config.js';
 
 export const app = express();
 
+// Security headers with Helmet
+app.use(helmet());
+
+// CORS configuration from environment variable
 app.use(
   cors({
-    origin: [config.FRONTEND_URL, 'http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: config.CORS_ORIGIN.split(',').map((o) => o.trim()),
     credentials: true,
   })
 );
 
-app.use(express.json());
+// JSON body limit (1MB max)
+app.use(express.json({ limit: '1mb' }));
 
-if (config.NODE_ENV !== 'test') {
-  app.use(
-    pinoHttp({
-      logger,
-      autoLogging: {
-        ignore: (req) => req.url?.includes('/health') ?? false,
+// Pino request logger with unique Request IDs
+app.use(
+  pinoHttp({
+    logger,
+    genReqId: (req) => {
+      const existingId = req.headers['x-request-id'];
+      if (typeof existingId === 'string' && existingId.length > 0) {
+        return existingId;
+      }
+      return crypto.randomUUID();
+    },
+    customProps: (req) => ({
+      requestId: req.id,
+    }),
+    autoLogging: {
+      ignore: (req) => req.url?.includes('/health') && config.NODE_ENV === 'test',
+    },
+  })
+);
+
+// Rate Limiting (standard rate-limiting headers enabled)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: config.NODE_ENV === 'test' ? 10000 : 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: {
+        code: 'TOO_MANY_REQUESTS',
+        message: 'Too many requests, please try again later',
       },
-    })
-  );
-}
+    });
+  },
+});
+app.use(limiter);
 
-// API Routes mounted on /api/v1
+// API Routes mounted under /api/v1
 const apiRouter = express.Router();
 apiRouter.use(healthRouter);
 apiRouter.use(authRouter);
@@ -40,6 +74,6 @@ apiRouter.use('/admin', adminRouter);
 
 app.use('/api/v1', apiRouter);
 
-// 404 & Central Error Handler
+// 404 Not Found & Central Error Handler
 app.use(notFoundHandler);
 app.use(errorHandler);
