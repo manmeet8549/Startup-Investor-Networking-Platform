@@ -1340,6 +1340,179 @@ class InMemoryDatabase {
     return { ...clone };
   }
 
+  // --- Mentorship & Mentors ---
+  listMentors(expertise?: string): Array<{ profile: Profile; mentor_profile: MentorProfile | null }> {
+    const list: Array<{ profile: Profile; mentor_profile: MentorProfile | null }> = [];
+    for (const p of this.profiles.values()) {
+      if (p.role === 'mentor' && p.status === 'active') {
+        const mp = this.mentorProfiles.get(p.id) || null;
+        if (expertise) {
+          const expLower = expertise.toLowerCase();
+          const expList = mp?.expertise || (mp as any)?.expertise_areas || [];
+          const matches = expList.some((e: string) => e.toLowerCase().includes(expLower));
+          if (!matches) continue;
+        }
+        list.push({ profile: { ...p }, mentor_profile: mp ? { ...mp } : null });
+      }
+    }
+    return list;
+  }
+
+  createMentorshipRequest(req: MentorshipRequest): MentorshipRequest {
+    const clone = {
+      ...req,
+      created_at: req.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.mentorshipRequests.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  getMentorshipRequestById(id: string): MentorshipRequest | null {
+    const r = this.mentorshipRequests.get(id);
+    return r ? { ...r } : null;
+  }
+
+  listMentorshipRequests(filter: { mentorId?: string; founderId?: string; status?: RequestStatus }): MentorshipRequest[] {
+    return Array.from(this.mentorshipRequests.values()).filter((r) => {
+      if (filter.mentorId && r.mentor_id !== filter.mentorId) return false;
+      if (filter.founderId && r.founder_id !== filter.founderId) return false;
+      if (filter.status && r.status !== filter.status) return false;
+      return true;
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  updateMentorshipRequest(id: string, updates: Partial<MentorshipRequest>): MentorshipRequest | null {
+    const existing = this.mentorshipRequests.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.mentorshipRequests.set(id, updated);
+    return { ...updated };
+  }
+
+  listMentorFeedback(startupId?: string): MentorFeedback[] {
+    return Array.from(this.mentorFeedback.values())
+      .filter((fb) => (startupId ? fb.startup_id === startupId : true))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  // --- Incubator Programs ---
+  createProgram(program: IncubatorProgram): IncubatorProgram {
+    const clone = {
+      ...program,
+      created_at: program.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.incubatorPrograms.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  getProgramById(id: string): IncubatorProgram | null {
+    const p = this.incubatorPrograms.get(id);
+    return p ? { ...p } : null;
+  }
+
+  listPrograms(filter?: { sector?: string; stage?: string; activeOnly?: boolean; incubatorId?: string }): IncubatorProgram[] {
+    return Array.from(this.incubatorPrograms.values()).filter((p) => {
+      if (filter?.activeOnly !== false && !p.is_active) return false;
+      if (filter?.incubatorId && p.incubator_id !== filter.incubatorId) return false;
+      if (filter?.sector) {
+        const secLower = filter.sector.toLowerCase();
+        const hasSector = p.sectors.some((s) => s.toLowerCase().includes(secLower));
+        if (!hasSector) return false;
+      }
+      if (filter?.stage) {
+        const stageLower = filter.stage.toLowerCase();
+        const hasStage = p.stages?.some((s) => s.toLowerCase().includes(stageLower));
+        if (!hasStage) return false;
+      }
+      return true;
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  updateProgram(id: string, updates: Partial<IncubatorProgram>): IncubatorProgram | null {
+    const existing = this.incubatorPrograms.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.incubatorPrograms.set(id, updated);
+    return { ...updated };
+  }
+
+  deleteProgram(id: string): boolean {
+    return this.incubatorPrograms.delete(id);
+  }
+
+  // --- Applications ---
+  getApplicationById(id: string): Application | null {
+    const a = this.applications.get(id);
+    return a ? { ...a } : null;
+  }
+
+  listApplications(filter: { programId?: string; founderId?: string; startupId?: string; incubatorId?: string }): Application[] {
+    return Array.from(this.applications.values()).filter((a) => {
+      if (filter.programId && a.program_id !== filter.programId) return false;
+      if (filter.founderId && a.founder_id !== filter.founderId) return false;
+      if (filter.startupId && a.startup_id !== filter.startupId) return false;
+      if (filter.incubatorId) {
+        const prog = this.incubatorPrograms.get(a.program_id);
+        if (!prog || prog.incubator_id !== filter.incubatorId) return false;
+      }
+      return true;
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  updateApplication(id: string, updates: Partial<Application>): Application | null {
+    const existing = this.applications.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.applications.set(id, updated);
+    return { ...updated };
+  }
+
+  // --- Notifications ---
+  listNotifications(userId: string): Notification[] {
+    return Array.from(this.notifications.values())
+      .filter((n) => n.user_id === userId)
+      .map((n) => ({ ...n, is_read: n.read }))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  getUnreadNotificationsCount(userId: string): number {
+    return Array.from(this.notifications.values()).filter((n) => n.user_id === userId && !n.read).length;
+  }
+
+  markNotificationAsRead(id: string, userId: string): Notification | null {
+    const n = this.notifications.get(id);
+    if (!n) return null;
+    if (n.user_id !== userId) return null;
+    const updated = { ...n, read: true, is_read: true };
+    this.notifications.set(id, updated);
+    return { ...updated };
+  }
+
+  markAllNotificationsAsRead(userId: string): number {
+    let count = 0;
+    for (const [id, n] of this.notifications.entries()) {
+      if (n.user_id === userId && !n.read) {
+        this.notifications.set(id, { ...n, read: true });
+        count++;
+      }
+    }
+    return count;
+  }
+
   // --- RLS Evaluation Helpers ---
   canReadStartup(userId: string, startup: Startup, userRole?: string): boolean {
     if (userRole === 'admin') return true;

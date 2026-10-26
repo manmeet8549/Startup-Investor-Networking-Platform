@@ -1178,3 +1178,196 @@ Sends a direct message. **Security Rule**: Messaging is blocked between unconnec
 Marks all unread messages in the conversation as read.
 - **Auth**: `Bearer <token>`
 - **Response**: `200 OK`
+
+---
+
+## 8. Mentorship, Incubation & Notifications (Iteration 8)
+
+### 8.1 Mentors & Mentorship Requests
+
+#### `GET /api/v1/mentors`
+Lists verified mentors. Supports filtering by expertise area.
+- **Auth**: Public or `Bearer <token>`
+- **Query Parameters**:
+  - `expertise`: String (e.g. `AgriTech`, `SaaS Growth`)
+- **Response**: `200 OK`
+
+#### `GET /api/v1/mentors/:id`
+Retrieves mentor profile, operational background, and expertise areas.
+- **Auth**: Public or `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `POST /api/v1/mentorship-requests`
+Founder sends a mentorship guidance request for a specific startup.
+- **Auth**: `Bearer <token>` (Founder or Admin)
+- **Request Body**:
+```json
+{
+  "mentor_id": "m0000000-0000-0000-0000-000000000001",
+  "startup_id": "s0000000-0000-0000-0000-000000000001",
+  "topic": "Go-to-market advisory",
+  "message": "Would love your guidance on our AgriTech sensor pilot in Punjab.",
+  "goals": ["Field trial validation", "Pricing advice"]
+}
+```
+- **Notifications**: Automatically notifies the target mentor via `notify()`.
+- **Response**: `201 Created`
+
+#### `GET /api/v1/mentorship-requests` & `GET /api/v1/me/mentorship-requests`
+Lists incoming or outgoing mentorship requests for the authenticated user.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `PATCH /api/v1/mentorship-requests/:id/respond`
+Target mentor accepts or declines the mentorship request.
+- **Auth**: `Bearer <token>` (Target Mentor only; other users receive `403 FORBIDDEN_RESOURCE`)
+- **Request Body**:
+```json
+{
+  "status": "accepted",
+  "response_note": "Glad to connect! Let's arrange an introductory call."
+}
+```
+- **Notifications**: Dispatches notification to the requesting founder.
+- **Response**: `200 OK`
+
+#### `POST /api/v1/startups/:id/feedback`
+Mentors submit structured advisory feedback and ratings for a startup.
+- **Auth**: `Bearer <token>` (Mentor or Admin)
+- **Request Body**:
+```json
+{
+  "rating": 5,
+  "feedback": "Strong unit economics and local cooperative trust in Punjab.",
+  "strengths": ["Clear value prop", "Low CAC"],
+  "areas_for_improvement": ["Patent defense needed"]
+}
+```
+- **Validation**: Rating must be an integer between 1 and 5 (out-of-range returns 400/422).
+- **Notifications**: Dispatches `mentor_feedback` notification to the startup owner.
+- **Response**: `201 Created`
+
+#### `GET /api/v1/startups/:id/feedback`
+Lists all feedback and ratings left by mentors for a startup.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+---
+
+### 8.2 Incubator Programs
+
+#### `POST /api/v1/programs`
+Creates an incubator or acceleration program cohort.
+- **Auth**: `Bearer <token>` (Incubator or Admin only)
+- **Request Body**:
+```json
+{
+  "title": "DeepTech Acceleration Cohort 2027",
+  "description": "6-month intensive acceleration for hardware and AI prototypes.",
+  "eligibility": "Must have working MVP registered in India.",
+  "benefits": "₹25 Lakh funding, fab lab access, demo day.",
+  "sectors": ["AI", "Hardware", "DeepTech"],
+  "deadline": "2027-03-31T23:59:59Z"
+}
+```
+- **Response**: `201 Created`
+
+#### `GET /api/v1/programs`
+Public listing of active programs with filter support.
+- **Query Parameters**: `sector`, `stage`, `activeOnly`
+- **Response**: `200 OK`
+
+#### `GET /api/v1/programs/:id`
+Retrieves program details.
+- **Response**: `200 OK`
+
+#### `PATCH /api/v1/programs/:id`
+Updates program benefits, deadline, or description.
+- **Auth**: `Bearer <token>` (Owning incubator only; others receive `403 FORBIDDEN_RESOURCE`)
+- **Response**: `200 OK`
+
+#### `DELETE /api/v1/programs/:id`
+Deletes an incubation program.
+- **Auth**: `Bearer <token>` (Owning incubator only)
+- **Response**: `200 OK`
+
+---
+
+### 8.3 Applications & Funnel State Machine
+
+#### `POST /api/v1/programs/:id/apply`
+Founders submit their startup to an incubator program.
+- **Auth**: `Bearer <token>` (Startup Founder)
+- **Request Body**:
+```json
+{
+  "startup_id": "s0000000-0000-0000-0000-000000000001",
+  "pitch_summary": "Practical crop intelligence for 200+ northern farmers."
+}
+```
+- **Enforcements**:
+  - **Deadline Check**: If current time is past `program.deadline`, returns **`422 DEADLINE_PASSED`**.
+  - **Duplicate Check**: Only 1 application allowed per startup per program. Duplicate returns **`409 DUPLICATE_APPLICATION`**.
+- **Notifications**: Dispatches `application_submitted` notification to the incubator.
+- **Response**: `201 Created`
+
+#### `GET /api/v1/me/applications`
+Founders list all their program applications, statuses, and decision notes.
+- **Auth**: `Bearer <token>` (Founder)
+- **Response**: `200 OK`
+
+#### `GET /api/v1/applications` & `GET /api/v1/programs/:id/applications`
+Incubators list applications received for review.
+- **Auth**: `Bearer <token>` (Incubator or Admin)
+- **Response**: `200 OK`
+
+#### `PATCH /api/v1/applications/:id/status`
+Advances an application through the state funnel.
+- **Auth**: `Bearer <token>` (Owning Incubator only; others receive `403 FORBIDDEN_RESOURCE`)
+- **State Machine Transitions**:
+  - `submitted` -> `under_review`, `rejected`
+  - `under_review` -> `shortlisted`, `rejected`
+  - `shortlisted` -> `accepted`, `rejected`
+  - `rejected` -> `under_review`
+  - *Invalid jump returns **`400 INVALID_STATUS_TRANSITION`**.*
+- **Request Body**:
+```json
+{
+  "status": "shortlisted",
+  "decision_notes": "Shortlisted for interview batch 1."
+}
+```
+- **Notifications**: Dispatches `application_status_updated` notification to the founder.
+- **Response**: `200 OK`
+
+---
+
+### 8.4 Notifications
+
+#### `GET /api/v1/notifications`
+Fetches chronological notification feed for the authenticated user.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `GET /api/v1/notifications/unread-count`
+Returns unread notification badge count.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+```json
+{
+  "data": {
+    "count": 3,
+    "unread_count": 3
+  }
+}
+```
+
+#### `PATCH /api/v1/notifications/:id/read`
+Marks an individual notification as read.
+- **Auth**: `Bearer <token>` (Recipient only; others receive `403 FORBIDDEN_RESOURCE`)
+- **Response**: `200 OK`
+
+#### `POST /api/v1/notifications/read-all`
+Marks all unread notifications for the user as read.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`

@@ -6,7 +6,7 @@ export type UserStatus = 'active' | 'suspended';
 export type VerificationStatus = 'pending' | 'approved' | 'verified' | 'rejected' | 'suspended';
 export type StartupStage = 'idea' | 'validation' | 'mvp' | 'early_traction' | 'growth';
 export type Visibility = 'public' | 'access_controlled' | 'private';
-export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'accepted' | 'declined' | 'cancelled';
 export type PipelineStatus = 'interested' | 'meeting_requested' | 'in_discussion' | 'passed' | 'follow_up';
 export type ApplicationStatus = 'submitted' | 'under_review' | 'shortlisted' | 'accepted' | 'rejected';
 
@@ -222,13 +222,14 @@ export interface MentorshipRequest {
   topic: string;
   message: string;
   status: RequestStatus;
+  response_note?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface MentorFeedback {
   id: string;
-  mentorship_request_id: string;
+  mentorship_request_id?: string | null;
   mentor_id: string;
   startup_id: string;
   feedback: string;
@@ -241,7 +242,9 @@ export interface IncubatorProgram {
   id: string;
   incubator_id: string;
   name: string;
+  title?: string;
   description: string;
+  eligibility?: string;
   benefits: string;
   sectors: string[];
   stages: string[];

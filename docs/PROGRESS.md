@@ -11,6 +11,7 @@
 | **Iteration 5** | **Discovery, Search, Multi-Filters, Query Optimization & Dynamic Frontend** | **Completed** |
 | **Iteration 6** | **Investor Preferences, Transparent Smart Matching & Re-ranking** | **Completed** |
 | **Iteration 7** | **Investor Engagement, Pipeline Tracking, Pitch Meetings, Connections & Messaging** | **Completed** |
+| **Iteration 8** | **Mentorship, Incubation Programs, Cohort Applications & Real-time Notifications** | **Completed** |
 
 ---
 
@@ -326,6 +327,75 @@
      - Direct messaging guards: strictly blocks unconnected users with 403; unlocks messaging upon accepted pitch request or connection.
    - Total backend test suite: **150 passing tests across 9 test suites** (100% pass rate).
    - Frontend Next.js build: verified with zero errors (`npm run build` passed).
+
+
+## Iteration 8 Details
+
+### Completed Deliverables
+1. **Mentor Discovery, Requests & Structured Feedback**:
+   - `GET /api/v1/mentors`: Public directory with case-insensitive `expertise` filter and flattened profiles.
+   - `GET /api/v1/mentors/:id`: Mentor profile details with expertise, bio, and operational experience.
+   - `POST /api/v1/mentorship-requests`: Founders request guidance for a startup; creates notification for target mentor.
+   - `PATCH /api/v1/mentorship-requests/:id/respond`: Target mentor accepts or declines with optional response note; non-target mentors blocked with 403 `FORBIDDEN_RESOURCE`. Dispatches notification to founder.
+   - `GET /api/v1/mentorship-requests`: Lists requests filtered by mentor or founder.
+   - `POST /api/v1/startups/:id/feedback`: Mentors submit structured evaluation with 1-5 star rating, qualitative commentary, strengths, and improvement areas. Rating range 1-5 strictly enforced; founder notified upon submission.
+   - `GET /api/v1/startups/:id/feedback`: Lists public feedback for a startup with reviewer details.
+
+2. **Incubator Programs CRUD**:
+   - `POST /api/v1/programs`: Incubators launch programs with `title`/`name`, `description`, `eligibility`, `benefits`, `sectors`, and `deadline`. Non-incubator roles rejected with 403.
+   - `GET /api/v1/programs`: Public directory with sector and active-cohort filters.
+   - `GET /api/v1/programs/:id`: Public program details.
+   - `PATCH /api/v1/programs/:id`: Update program parameters. Only owning incubator can modify (403 `FORBIDDEN_RESOURCE` on cross-incubator tampering).
+   - `DELETE /api/v1/programs/:id`: Delete program. Enforces incubator ownership.
+
+3. **Applications & Funnel State Machine**:
+   - `POST /api/v1/programs/:id/apply`: Founders submit startup application before deadline.
+     - Applying after deadline strictly rejected with **422** (`DEADLINE_PASSED`).
+     - Duplicate application for same startup & program rejected with **409** (`DUPLICATE_APPLICATION`).
+     - Dispatches `application_submitted` notification to the incubator.
+   - `GET /api/v1/me/applications`: Founders track all their program applications, statuses, and decision notes.
+   - `GET /api/v1/applications` & `GET /api/v1/programs/:id/applications`: Incubators retrieve received applications.
+   - `PATCH /api/v1/applications/:id/status`: Transition application status through validated funnel:
+     - `submitted` -> `under_review`, `rejected`
+     - `under_review` -> `shortlisted`, `rejected`
+     - `shortlisted` -> `accepted`, `rejected`
+     - `rejected` -> `under_review`
+     - Invalid status jumps rejected with 400 (`INVALID_STATUS_TRANSITION`).
+     - Non-owning incubators rejected with 403 (`FORBIDDEN_RESOURCE`).
+     - Dispatches `application_status_updated` notification to the founder.
+
+4. **Notifications Visibility & Read Operations**:
+   - `GET /api/v1/notifications`: Chronological list of user-specific notifications.
+   - `GET /api/v1/notifications/unread-count`: Returns `{ count, unread_count }`.
+   - `PATCH /api/v1/notifications/:id/read`: Marks individual notification as read. Non-recipients blocked with 403 (`FORBIDDEN_RESOURCE`).
+   - `POST /api/v1/notifications/read-all`: Bulk marks all recipient unread notifications as read.
+   - Full recipient isolation: User A can never inspect or modify User B's notifications.
+
+5. **Frontend Dynamic Integration**:
+   - **Notification Bell & Live Badge (`<NotificationDropdown />`)**: Real-time polling with badge counter, 1-click "Mark all read", individual read toggle, and rich event icons.
+   - **Mentor Portal (`<MentorPortalView />`)**:
+     - *Mentorship Requests*: Interactive cards with Accept / Decline flow and response notes.
+     - *Startups to Review*: Startup selector and structured feedback form with 1-5 interactive stars, strengths tags, and improvement tags.
+     - *My Expertise Profile*: Interactive expertise tags editor, experience years, and LinkedIn sync.
+   - **Incubator Portal (`<IncubatorPortalView />`)**:
+     - *My Programs*: Cohort management with Create, Edit, and Delete modals.
+     - *Applications Received*: Review funnel table with Shortlist, Review, Accept, and Reject transitions + decision notes.
+   - **Founder Mentors View (`<FounderMentorsView />`)**: Directory with expertise badges, search, "Request Mentorship" modal, and "My Requests" status tracker.
+   - **Founder Incubators View (`<FounderIncubatorsView />`)**: Open cohorts directory with deadline indicators, "Apply to Program" modal with duplicate and deadline validation, and "My Applications" lifecycle tracker.
+
+6. **Automated Testing Suite (`backend/src/tests/iteration8.test.ts`)**:
+   - 16 unit and integration tests passing:
+     - Mentors listing and expertise filtering.
+     - Mentorship request creation, mentor notification, and response ownership (target mentor only; 403 on non-target).
+     - Startup feedback and 1-5 rating range enforcement.
+     - Program CRUD and ownership enforcement.
+     - Application deadline rejection (422) and duplicate application rejection (409).
+     - State machine transition rules and non-owning incubator rejection (403).
+     - Notifications recipient isolation and read tracking.
+   - Full test suite: **166 passing tests across 10 test suites** (100% pass rate).
+   - Frontend Next.js build: verified with zero errors (`npm run build` passed).
+
+---
 
 ## Assumptions
 1. **Database Role Source of Truth**: The JWT contains the user ID (`sub`). The user's role is always fetched directly from the database `profiles` table to prevent token manipulation or client-side role tampering.
