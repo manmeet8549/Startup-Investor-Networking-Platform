@@ -85,6 +85,25 @@ async function request<T>(
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      try {
+        const { supabase } = await import('./supabase');
+        const { data } = await supabase.auth.refreshSession();
+        if (data?.session?.access_token) {
+          setAuthToken(data.session.access_token);
+          headers['Authorization'] = `Bearer ${data.session.access_token}`;
+          const retryRes = await fetch(url, { ...options, headers });
+          if (retryRes.ok) {
+            return (await retryRes.json()) as ApiResponse<T>;
+          }
+        }
+      } catch {
+        // Token refresh failed
+      }
+      setAuthToken(null);
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
+
     if (body && body.error) {
       throw new ApiError(response.status, body.error);
     }

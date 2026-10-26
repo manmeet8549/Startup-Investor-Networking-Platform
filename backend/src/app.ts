@@ -18,6 +18,7 @@ import { matchingRouter, investorRouter } from './routes/matching.routes.js';
 import { engagementRouter } from './routes/engagement.routes.js';
 import { mentorshipIncubationRouter } from './routes/mentorship-incubation.routes.js';
 import { reportRouter } from './routes/report.routes.js';
+import { docsRouter } from './routes/docs.routes.js';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware.js';
 import { config } from './config.js';
 
@@ -36,6 +37,7 @@ app.use(
 
 // JSON body limit (1MB max)
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Pino request logger with unique Request IDs
 app.use(
@@ -91,6 +93,7 @@ apiRouter.use(engagementRouter);
 apiRouter.use(mentorshipIncubationRouter);
 apiRouter.use(reportRouter);
 
+app.use('/api', docsRouter);
 app.use('/api/v1', apiRouter);
 
 // 404 Not Found & Central Error Handler

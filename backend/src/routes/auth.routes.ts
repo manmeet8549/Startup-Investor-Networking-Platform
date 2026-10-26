@@ -5,7 +5,10 @@ import * as authService from '../services/auth.service.js';
 import * as profileService from '../services/profile.service.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 
+import { authLimiter } from '../middleware/rate-limit.middleware.js';
+
 export const authRouter = Router();
+authRouter.use('/auth', authLimiter);
 
 authRouter.post('/auth/register-profile', validateBody(registerProfileSchema), async (req, res, next) => {
   try {

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const userRoleEnum = z.enum(['founder', 'investor', 'mentor', 'incubator', 'admin']);
 export const registerableRoleEnum = z.enum(['founder', 'investor', 'mentor', 'incubator'], {
-  errorMap: () => ({ message: 'Role must be founder, investor, mentor, or incubator. Admin registration is prohibited.' }),
+  message: 'Role must be founder, investor, mentor, or incubator. Admin registration is prohibited.',
 });
 export const userStatusEnum = z.enum(['active', 'suspended']);
 export const verificationStatusEnum = z.enum(['pending', 'verified', 'rejected']);

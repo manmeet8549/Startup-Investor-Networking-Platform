@@ -80,7 +80,7 @@ export const applyProgramSchema = z.object({
 
 export const updateApplicationStatusSchema = z.object({
   status: z.enum(['submitted', 'under_review', 'shortlisted', 'accepted', 'rejected'], {
-    errorMap: () => ({ message: 'Invalid application status' }),
+    message: 'Invalid application status',
   }),
   decision_notes: z.string().max(1000).optional().nullable(),
 });

@@ -13,6 +13,7 @@ import {
 } from '../schemas/startup.schema.js';
 import * as startupService from '../services/startup.service.js';
 import * as documentService from '../services/document.service.js';
+import { uploadLimiter } from '../middleware/rate-limit.middleware.js';
 
 export const startupRouter = Router();
 
@@ -199,6 +200,7 @@ startupRouter.delete(
 startupRouter.post(
   '/startups/:id/documents',
   authenticate,
+  uploadLimiter,
   upload.single('file'),
   async (req, res, next) => {
     try {

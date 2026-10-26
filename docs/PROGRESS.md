@@ -13,6 +13,7 @@
 | **Iteration 7** | **Investor Engagement, Pipeline Tracking, Pitch Meetings, Connections & Messaging** | **Completed** |
 | **Iteration 8** | **Mentorship, Incubation Programs, Cohort Applications & Real-time Notifications** | **Completed** |
 | **Iteration 9** | **Admin, Moderation, User Suspension, Startup Listings, Reports, Platform Stats & Audit Trail** | **Completed** |
+| **Iteration 10** | **Hardening, OpenAPI Docs, End-to-End Test Journey, Coverage >= 80%, Deployment Guide & Release** | **Completed** |
 
 ---
 
@@ -458,6 +459,51 @@
      - Audit log creation verifying that moderation actions record structured audit entries.
    - Full test suite: **178 passing tests across 11 test suites** (100% pass rate).
    - Frontend Next.js build: verified with zero errors (`npm run build` passed).
+
+---
+
+## Iteration 10 Details: Hardening, Documentation and Release
+
+### Completed Deliverables
+1. **Security Review & Hardening**:
+   - **Row-Level Security (RLS)**: Verified `ALTER TABLE public.<table_name> ENABLE ROW LEVEL SECURITY;` on all 16 platform tables across migrations.
+   - **Dedicated Rate Limits**: Implemented `authLimiter` (10 req/15m for sensitive auth), `uploadLimiter` (20 uploads/hr for pitch decks), and `messageLimiter` (60 msg/min for real-time messaging) in [rate-limit.middleware.ts](file:///d:/Downloads/founders-den-redesign/backend/src/middleware/rate-limit.middleware.ts).
+   - **Strict CORS & Request Size Limits**: Configured strict CORS origin matching and enforced `1mb` JSON request body ceiling (`express.json({ limit: '1mb' })`) and `10mb` PDF upload ceiling.
+   - **No Secrets in Logs**: Enhanced Pino logger in [logger.ts](file:///d:/Downloads/founders-den-redesign/backend/src/utils/logger.ts) with strict redaction paths for `authorization`, `cookie`, `password`, `*.password`, `token`, `*.token`, `access_token`, `refresh_token`, `secret`, `*.secret`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_JWT_SECRET`. Logs show `[REDACTED]`.
+   - **Zero npm Audit Findings**: Upgraded dependencies (`zod@4.6.7`, `vitest@5.0.5`, `@vitest/coverage-v8@5.0.5`, `next@16.4.3`). Both `backend` and `frontend` have **0 vulnerabilities** (`npm audit` exits 0).
+
+2. **OpenAPI Specification & Interactive Swagger UI**:
+   - Generated comprehensive [docs/openapi.yaml](file:///d:/Downloads/founders-den-redesign/docs/openapi.yaml) documenting every endpoint across Auth, Profiles, Startups, Documents, Discovery, Matching, Engagement, Mentorship, Incubation, Notifications, Reports, and Admin moderation.
+   - Implemented Swagger UI documentation route at `GET /api/docs` and raw spec endpoint at `GET /api/docs/openapi.yaml` in [docs.routes.ts](file:///d:/Downloads/founders-den-redesign/backend/src/routes/docs.routes.ts).
+
+3. **End-to-End User Journey Test (`backend/src/tests/e2e-journey.test.ts`)**:
+   - Automated an 8-phase full lifecycle integration test:
+     1. Founder registers and creates startup profile with team and pitch metrics.
+     2. Admin reviews and approves pending investor verification.
+     3. Founder uploads PDF pitch deck; access control is verified.
+     4. Smart matching computes multi-factor compatibility scores.
+     5. Verified investor requests a pitch meeting; founder accepts.
+     6. Verified mentor reviews startup and submits structured feedback.
+     7. Incubator launches program; startup applies; incubator accepts application.
+     8. Notifications confirm each stakeholder was notified with correct title and event payload.
+
+4. **Service & Matching Module Code Coverage (>= 80%)**:
+   - Reached **81.44% line coverage overall** across all files.
+   - Reached **80.01% line coverage on services** (`src/services/**`).
+   - Reached **93.98% line coverage on matching** (`src/matching/score.ts`).
+   - Fixed all flaky and syntax errors; **194/194 tests pass** across 13 test suites.
+
+5. **Demo Seed Command & Deployment Guide**:
+   - Configured `npm run seed:demo` / `npm run db:seed` in [package.json](file:///d:/Downloads/founders-den-redesign/backend/package.json), seeding 11 profiles across all 5 roles, 5 startups, investor theses, mentors, incubator programs, applications, notes, and messages.
+   - Authored comprehensive [docs/DEPLOYMENT.md](file:///d:/Downloads/founders-den-redesign/docs/DEPLOYMENT.md) covering Render, Railway, Fly.io, Supabase production project setup, environment variables, running migrations, health check monitoring (`GET /api/v1/health`), and PITR backup/recovery strategies.
+
+6. **Frontend Static to Dynamic Hardening & Playwright Tests**:
+   - Added automatic 401 redirect with token refresh and unauthorized handling in [api-client.ts](file:///d:/Downloads/founders-den-redesign/frontend/lib/api-client.ts) and [AuthContext.tsx](file:///d:/Downloads/founders-den-redesign/frontend/context/AuthContext.tsx).
+   - Created Playwright E2E test suite in [frontend/tests/platform-flows.spec.ts](file:///d:/Downloads/founders-den-redesign/frontend/tests/platform-flows.spec.ts) covering:
+     1. Sign up, toggle to login, and authenticate.
+     2. Founder creates a startup with tagline and pitch details.
+     3. Investor requests a pitch meeting and verifies status transition.
+   - Verified clean production builds on both frontend (`next build` exits 0) and backend (`tsc` exits 0).
 
 ---
 

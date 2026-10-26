@@ -14,6 +14,7 @@ import {
   sendMessageSchema,
 } from '../schemas/engagement.schema.js';
 import type { RequestStatus } from '../db/schema.types.js';
+import { messageLimiter } from '../middleware/rate-limit.middleware.js';
 
 export const engagementRouter = Router();
 
@@ -279,6 +280,7 @@ engagementRouter.patch(
 // POST /pitch-requests/:id/messages
 engagementRouter.post(
   '/pitch-requests/:id/messages',
+  messageLimiter,
   validateBody(pitchRequestMessageSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -392,6 +394,7 @@ engagementRouter.get(
 // POST /conversations/:id/messages
 engagementRouter.post(
   '/conversations/:id/messages',
+  messageLimiter,
   validateBody(sendMessageSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -427,6 +430,7 @@ engagementRouter.patch(
 // POST /messages (Direct send alternative)
 engagementRouter.post(
   '/messages',
+  messageLimiter,
   validateBody(sendMessageSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

@@ -132,8 +132,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    const handleUnauthorized = () => {
+      setAuthToken(null);
+      setUser(null);
+      setRole('Public');
+      setError('Your session has expired. Please log in again.');
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:unauthorized', handleUnauthorized);
+    }
+
     return () => {
       subscription.unsubscribe();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('auth:unauthorized', handleUnauthorized);
+      }
     };
   }, [refreshProfile]);
 

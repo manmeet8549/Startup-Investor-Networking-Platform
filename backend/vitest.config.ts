@@ -6,5 +6,10 @@ export default defineConfig({
     environment: 'node',
     include: ['src/tests/**/*.test.ts'],
     testTimeout: 10000,
+    coverage: {
+      provider: 'v8',
+      include: ['src/services/**', 'src/matching/**'],
+      reporter: ['text', 'json', 'html'],
+    },
   },
 });

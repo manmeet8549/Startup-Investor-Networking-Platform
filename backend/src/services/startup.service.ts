@@ -585,6 +585,24 @@ export async function updateTeamMember(
     throw new AppError('Only the startup owner or admin can manage team members', 403, 'FORBIDDEN');
   }
 
+  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+    const res = await query<StartupTeamMember>(
+      `UPDATE public.startup_team_members
+       SET name = COALESCE($1, name),
+           role_title = COALESCE($2, role_title),
+           email = COALESCE($3, email),
+           is_primary = COALESCE($4, is_primary),
+           updated_at = NOW()
+       WHERE id = $5 AND startup_id = $6
+       RETURNING *`,
+      [input.name || null, input.role_title || null, input.email || null, input.is_primary ?? null, memberId, startupId]
+    );
+    if (res.rows.length === 0) {
+      throw new AppError('Team member not found', 404, 'NOT_FOUND');
+    }
+    return res.rows[0];
+  }
+
   const existingMember = inMemoryDb.getTeamMemberById(memberId);
   if (!existingMember || existingMember.startup_id !== startupId) {
     throw new AppError('Team member not found', 404, 'NOT_FOUND');
@@ -607,6 +625,17 @@ export async function deleteTeamMember(
 
   if (startup.founder_id !== userId && userRole !== 'admin') {
     throw new AppError('Only the startup owner or admin can manage team members', 403, 'FORBIDDEN');
+  }
+
+  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+    const res = await query(
+      'DELETE FROM public.startup_team_members WHERE id = $1 AND startup_id = $2',
+      [memberId, startupId]
+    );
+    if (res.rowCount === 0) {
+      throw new AppError('Team member not found', 404, 'NOT_FOUND');
+    }
+    return;
   }
 
   const existingMember = inMemoryDb.getTeamMemberById(memberId);

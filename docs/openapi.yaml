@@ -1,0 +1,825 @@
+openapi: 3.0.3
+info:
+  title: Founders Den API
+  description: Production-grade REST API for Founders Den — Startup-Investor Networking Platform
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local development server
+  - url: /api/v1
+    description: Current host server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns API server status and timestamp.
+      responses:
+        '200':
+          description: Service is healthy
+
+  /auth/signup:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, full_name, role]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                full_name: { type: string }
+                role: { type: string, enum: [founder, investor, mentor, incubator] }
+                organization: { type: string }
+                is_student: { type: boolean }
+      responses:
+        '201':
+          description: User registered successfully
+        '422':
+          description: Validation error
+
+  /auth/login:
+    post:
+      summary: Log in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Authenticated successfully with JWT token
+        '401':
+          description: Invalid credentials
+        '403':
+          description: Account suspended
+
+  /me:
+    get:
+      summary: Get current authenticated user profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current profile data
+    patch:
+      summary: Update current user profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name: { type: string }
+                organization: { type: string }
+                bio: { type: string }
+                location: { type: string }
+                website: { type: string }
+      responses:
+        '200':
+          description: Profile updated
+
+  /me/applications:
+    get:
+      summary: List current founder's incubator applications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of submitted program applications
+
+  /profiles/{id}:
+    get:
+      summary: Get public profile by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Profile found
+        '404':
+          description: Profile not found
+
+  /startups:
+    get:
+      summary: Discover listed startups
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: sector
+          in: query
+          schema: { type: string }
+        - name: stage
+          in: query
+          schema: { type: string }
+        - name: location
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Filtered startups listing
+    post:
+      summary: Create startup profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, one_liner, sector, stage, location]
+              properties:
+                name: { type: string }
+                one_liner: { type: string }
+                description: { type: string }
+                sector: { type: string }
+                stage: { type: string }
+                location: { type: string }
+                funding_ask: { type: number }
+                visibility: { type: string, enum: [public, access_controlled, private] }
+      responses:
+        '201':
+          description: Startup created
+
+  /startups/{id}:
+    get:
+      summary: Get startup details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Startup details with pitch deck meta and team
+    patch:
+      summary: Update startup details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Startup updated
+    delete:
+      summary: Delete startup
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Startup deleted
+
+  /startups/{id}/documents:
+    post:
+      summary: Upload pitch deck or document (PDF only, max 10MB)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string }
+                visibility: { type: string, enum: [public, access_controlled, private] }
+      responses:
+        '201':
+          description: Document uploaded and versioned
+
+  /documents/{id}/download:
+    get:
+      summary: Generate signed download URL (valid for 60s)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Time-limited signed URL
+        '403':
+          description: Access denied or pending approval
+
+  /documents/{id}/access-requests:
+    post:
+      summary: Request access to access-controlled pitch deck
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Access request submitted
+
+  /matches:
+    get:
+      summary: Get ranked matching startups for investor
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Scored and ranked startups with criteria breakdown
+
+  /matches/{startup_id}/explain:
+    get:
+      summary: Explain match fit between investor and specific startup
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startup_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Mathematical weights, score breakdown, and natural reasons
+
+  /investors/preferences:
+    get:
+      summary: Get current investor preferences
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Investor thesis, sectors, stages, and ticket range
+    put:
+      summary: Update investor preferences
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sectors: { type: array, items: { type: string } }
+                stages: { type: array, items: { type: string } }
+                ticket_min: { type: number }
+                ticket_max: { type: number }
+                regions: { type: array, items: { type: string } }
+                business_models: { type: array, items: { type: string } }
+                thesis: { type: string }
+      responses:
+        '200':
+          description: Preferences updated and match scores invalidated
+
+  /watchlist:
+    get:
+      summary: List investor watchlist startups
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Watchlist startups
+
+  /watchlist/{startup_id}:
+    post:
+      summary: Add startup to watchlist
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startup_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Startup bookmarked
+    delete:
+      summary: Remove startup from watchlist
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startup_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Startup removed from watchlist
+
+  /pipeline:
+    get:
+      summary: Get investor pipeline grouped by funnel status
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Grouped pipeline startups
+
+  /pipeline/{startup_id}/status:
+    patch:
+      summary: Move startup pipeline status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startup_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [interested, meeting_requested, in_discussion, passed, follow_up] }
+      responses:
+        '200':
+          description: Status advanced
+
+  /pitch-requests:
+    post:
+      summary: Send pitch meeting request
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startup_id, proposed_date, message]
+              properties:
+                startup_id: { type: string }
+                proposed_date: { type: string, format: date-time }
+                message: { type: string }
+      responses:
+        '201':
+          description: Pitch meeting requested
+    get:
+      summary: List pitch meeting requests
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Meeting requests list
+
+  /pitch-requests/{id}/respond:
+    patch:
+      summary: Accept, decline or propose alternative meeting date
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [accepted, declined, proposed_counter] }
+                counter_date: { type: string, format: date-time }
+                response_note: { type: string }
+      responses:
+        '200':
+          description: Response recorded
+
+  /conversations:
+    get:
+      summary: List all user message conversations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Conversations summary
+
+  /conversations/{id}/messages:
+    get:
+      summary: Get conversation messages history
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Messages array
+    post:
+      summary: Send message in conversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        '201':
+          description: Message delivered
+
+  /mentors:
+    get:
+      summary: List verified mentors
+      parameters:
+        - name: expertise
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Mentors list
+
+  /mentorship-requests:
+    post:
+      summary: Request mentorship from mentor
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mentor_id, startup_id, message]
+              properties:
+                mentor_id: { type: string }
+                startup_id: { type: string }
+                message: { type: string }
+      responses:
+        '201':
+          description: Mentorship requested
+
+  /startups/{id}/feedback:
+    post:
+      summary: Submit structured mentor feedback for startup
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating, feedback]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                feedback: { type: string }
+                strengths: { type: array, items: { type: string } }
+                areas_for_improvement: { type: array, items: { type: string } }
+      responses:
+        '201':
+          description: Feedback recorded
+
+  /programs:
+    get:
+      summary: Public listing of incubation programs
+      parameters:
+        - name: sector
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Active programs
+    post:
+      summary: Create incubator program cohort
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description, sectors, eligibility, benefits, deadline]
+              properties:
+                title: { type: string }
+                description: { type: string }
+                sectors: { type: array, items: { type: string } }
+                eligibility: { type: string }
+                benefits: { type: string }
+                deadline: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Program created
+
+  /programs/{id}/apply:
+    post:
+      summary: Apply to incubator program
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startup_id, pitch_summary]
+              properties:
+                startup_id: { type: string }
+                pitch_summary: { type: string }
+      responses:
+        '201':
+          description: Application submitted
+        '409':
+          description: Duplicate application
+        '422':
+          description: Program deadline passed
+
+  /applications/{id}/status:
+    patch:
+      summary: Advance application funnel status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [under_review, shortlisted, accepted, rejected] }
+                decision_notes: { type: string }
+      responses:
+        '200':
+          description: Application status updated
+
+  /notifications:
+    get:
+      summary: Fetch notification activity feed
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Notifications feed
+
+  /notifications/unread-count:
+    get:
+      summary: Get unread notification counter
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Unread counter
+
+  /notifications/{id}/read:
+    patch:
+      summary: Mark notification as read
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Marked read
+
+  /notifications/read-all:
+    post:
+      summary: Mark all user notifications as read
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All notifications marked read
+
+  /reports:
+    post:
+      summary: Submit trust & safety report
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_type, target_id, reason]
+              properties:
+                target_type: { type: string, enum: [startup, user, document, message, program, other] }
+                target_id: { type: string }
+                reason: { type: string }
+                details: { type: string }
+      responses:
+        '201':
+          description: Report recorded
+
+  /admin/users:
+    get:
+      summary: List users with filters
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Users list
+        '403':
+          description: Admin access required
+
+  /admin/users/{id}/suspend:
+    post:
+      summary: Suspend user account
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: User suspended and token blocked
+
+  /admin/users/{id}/reactivate:
+    post:
+      summary: Reactivate suspended user account
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: User reactivated
+
+  /admin/startups:
+    get:
+      summary: List all startups including hidden
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Admin startups list
+
+  /admin/startups/{id}/hide:
+    post:
+      summary: Hide startup from discovery
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Startup hidden from discovery
+
+  /admin/startups/{id}/unhide:
+    post:
+      summary: Unhide startup to restore discovery
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Startup unhidden
+
+  /admin/reports:
+    get:
+      summary: List trust and safety reports
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Reports queue
+
+  /admin/reports/{id}/resolve:
+    post:
+      summary: Resolve report
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Report resolved
+
+  /admin/reports/{id}/dismiss:
+    post:
+      summary: Dismiss report
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Report dismissed
+
+  /admin/stats:
+    get:
+      summary: Platform health and moderation stats
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Key platform metrics
+
+  /admin/audit-logs:
+    get:
+      summary: Immutable audit trail of administrative actions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Audit logs list
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

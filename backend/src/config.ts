@@ -6,11 +6,11 @@ dotenv.config();
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(5000),
-  CORS_ORIGIN: z.string({ required_error: 'CORS_ORIGIN is required' }).min(1, 'CORS_ORIGIN is required').default('http://localhost:3000'),
-  SUPABASE_URL: z.string({ required_error: 'SUPABASE_URL is required' }).url('SUPABASE_URL must be a valid URL'),
-  SUPABASE_ANON_KEY: z.string({ required_error: 'SUPABASE_ANON_KEY is required' }).min(1, 'SUPABASE_ANON_KEY is required'),
-  SUPABASE_SERVICE_ROLE_KEY: z.string({ required_error: 'SUPABASE_SERVICE_ROLE_KEY is required' }).min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
-  DATABASE_URL: z.string({ required_error: 'DATABASE_URL is required' }).min(1, 'DATABASE_URL is required (Supabase pooler string with SSL)'),
+  CORS_ORIGIN: z.string().min(1, 'CORS_ORIGIN is required').default('http://localhost:3000'),
+  SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid URL'),
+  SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (Supabase pooler string with SSL)'),
   SUPABASE_JWT_SECRET: z.string().default('founders-den-jwt-secret-for-dev-and-tests'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
@@ -20,8 +20,15 @@ export type EnvConfig = z.infer<typeof envSchema>;
 export function validateEnv(rawEnv: Record<string, unknown>): EnvConfig {
   const result = envSchema.safeParse(rawEnv);
   if (!result.success) {
-    const errorDetails = result.error.errors
-      .map((err) => `  - ${err.path.join('.')}: ${err.message}`)
+    const issues = result.error.issues || (result.error as any).errors || [];
+    const errorDetails = issues
+      .map((err: any) => {
+        const field = err.path.join('.');
+        if (err.message?.includes('undefined') || err.code === 'invalid_type') {
+          return `  - ${field}: ${field} is required`;
+        }
+        return `  - ${field}: ${err.message}`;
+      })
       .join('\n');
     const message = `Environment validation failed:\n${errorDetails}`;
     throw new Error(message);
