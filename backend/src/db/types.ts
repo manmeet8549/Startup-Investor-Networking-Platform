@@ -32,3 +32,47 @@ export interface VerificationRequest {
   created_at: string;
   updated_at: string;
 }
+
+export interface InvestorProfile {
+  user_id: string;
+  investment_thesis: string | null;
+  ticket_size_min: number;
+  ticket_size_max: number;
+  preferred_sectors: string[];
+  preferred_stages: string[];
+  preferred_locations: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MentorProfile {
+  user_id: string;
+  expertise_areas: string[];
+  years_of_experience: number;
+  mentoring_topics: string[];
+  linkedin_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IncubatorProfile {
+  user_id: string;
+  organization_name: string | null;
+  website: string | null;
+  program_types: string[];
+  cohort_size: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  admin_id?: string | null;
+  actor_id?: string | null;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  details?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: string;
+}

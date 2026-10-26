@@ -8,6 +8,8 @@ import {
   updateUserStatusSchema,
   listVerificationsQuerySchema,
   reviewVerificationSchema,
+  approveVerificationSchema,
+  rejectVerificationSchema,
 } from '../schemas/admin.schema.js';
 import * as adminService from '../services/admin.service.js';
 
@@ -55,6 +57,46 @@ adminRouter.get('/verifications', validateQuery(listVerificationsQuerySchema), a
     next(error);
   }
 });
+
+adminRouter.post(
+  '/verifications/:id/approve',
+  validateParams(uuidParamSchema),
+  validateBody(approveVerificationSchema),
+  async (req, res, next) => {
+    try {
+      const result = await adminService.approveVerification(
+        req.params.id,
+        req.user!.id,
+        req.body?.notes
+      );
+      res.status(200).json({
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+adminRouter.post(
+  '/verifications/:id/reject',
+  validateParams(uuidParamSchema),
+  validateBody(rejectVerificationSchema),
+  async (req, res, next) => {
+    try {
+      const result = await adminService.rejectVerification(
+        req.params.id,
+        req.user!.id,
+        req.body.reason
+      );
+      res.status(200).json({
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 adminRouter.patch(
   '/verifications/:id',

@@ -1,11 +1,22 @@
 import { Router } from 'express';
 import { validateBody } from '../middleware/validate.middleware.js';
-import { registerSchema, loginSchema, updateProfileSchema } from '../schemas/auth.schema.js';
+import { registerSchema, registerProfileSchema, loginSchema, updateProfileSchema } from '../schemas/auth.schema.js';
 import * as authService from '../services/auth.service.js';
 import * as profileService from '../services/profile.service.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 
 export const authRouter = Router();
+
+authRouter.post('/auth/register-profile', validateBody(registerProfileSchema), async (req, res, next) => {
+  try {
+    const result = await authService.registerProfile(req.body);
+    res.status(201).json({
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 authRouter.post('/auth/signup', validateBody(registerSchema), async (req, res, next) => {
   try {

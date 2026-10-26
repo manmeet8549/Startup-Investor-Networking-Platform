@@ -6,10 +6,10 @@
 |---|---|---|
 | **Iteration 1** | **Backend Scaffolding, DB Migrations, Auth, Profiles, Student Flag & Verification Queue** | **Completed** |
 | **Iteration 2** | Startup Profiles, Public Discovery, Filtering & Pagination | Planned |
-| **Iteration 3** | Pitch Decks, Private Storage Bucket & Short-Lived Signed URLs | Planned |
-| **Iteration 4** | Weighted Investor Matching Engine & Deal Pipeline | Planned |
-| **Iteration 5** | Mentorship Requests & Incubator Programs Lifecycle | Planned |
-| **Iteration 6** | Basic Messaging, Content Moderation & Full Frontend Live Integration | Planned |
+| **Iteration 3** | **Authentication, Roles, Profiles & Admin Verification (Supabase Auth)** | **Completed** |
+| **Iteration 4** | Pitch Decks, Private Storage Bucket & Short-Lived Signed URLs | Planned |
+| **Iteration 5** | Weighted Investor Matching Engine & Deal Pipeline | Planned |
+| **Iteration 6** | Mentorship Requests & Incubator Programs Lifecycle | Planned |
 
 ---
 
@@ -43,6 +43,36 @@
 5. **Documentation**:
    - `docs/API.md`: Detailed request/response schemas, status codes, and security requirements.
    - `docs/PROGRESS.md`: Tracking roadmap, completed features, assumptions, and known gaps.
+
+---
+
+## Iteration 3 Details
+
+### Completed Deliverables
+1. **Supabase Auth Middleware**:
+   - `authenticate`: verifies Supabase/custom JWT tokens against `SUPABASE_JWT_SECRET`, loads user profile directly from database, blocks suspended accounts with `403 ACCOUNT_SUSPENDED`.
+   - `requireRole(...roles)`: RBAC middleware strictly reading from database role.
+   - `requireVerified`: rejects unverified (`pending` or `rejected`) non-admin users with `403 UNVERIFIED_ACCOUNT`.
+2. **Registration Profile Endpoint (`POST /api/v1/auth/register-profile`)**:
+   - Accepts roles `founder`, `investor`, `mentor`, `incubator`.
+   - Strictly blocks registration as `admin` (`403 FORBIDDEN`).
+   - Founders verified immediately (`verified`); other roles initialized as `pending` and enqueued for admin review.
+3. **Role Profiles & Self Endpoints**:
+   - `GET /api/v1/me` and `PATCH /api/v1/me` (role escalation prevented).
+   - `GET` and `PUT` for `/api/v1/me/founder-profile`, `/api/v1/me/investor-profile`, `/api/v1/me/mentor-profile`, `/api/v1/me/incubator-profile`.
+4. **Admin Verification & Moderation**:
+   - `GET /api/v1/admin/verifications`: filters requests by `role` and `status`.
+   - `POST /api/v1/admin/verifications/:id/approve`: approves verification request, updates profile to `verified`, writes to `audit_logs`.
+   - `POST /api/v1/admin/verifications/:id/reject`: rejects verification request with required rejection reason, updates profile to `rejected`, writes to `audit_logs`.
+5. **Frontend (Static to Dynamic Integration)**:
+   - Dynamic Sign Up (with 4-role picker, student innovator checkbox), Login, and Forgot Password modal using `@supabase/supabase-js`.
+   - `AuthContext` with automatic token refresh, session persistence, role guards, and post-login portal redirection.
+   - Dynamic sidebar navigation per role; pending approval banner for unverified investor/mentor/incubator accounts.
+   - Live Admin Verification Queue with Approve/Reject buttons wired to backend endpoints.
+   - Editable Profile & Settings connected directly to `/me` and `/me/*-profile`.
+6. **Testing Suite**:
+   - Vitest suite expanded to 42 tests across 4 test suites (100% passing).
+   - Full coverage for role registration, admin rejection, role escalation prevention, verified-only dealfeed access, audit logs, and token tamper/expiry defenses.
 
 ---
 

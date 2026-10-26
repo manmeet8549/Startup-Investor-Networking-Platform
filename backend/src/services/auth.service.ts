@@ -3,10 +3,22 @@ import { inMemoryDb, query } from '../db/index.js';
 import type { Profile, VerificationRequest } from '../db/types.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { generateToken } from '../middleware/auth.middleware.js';
-import type { RegisterInput, LoginInput } from '../schemas/auth.schema.js';
+import type { RegisterInput, RegisterProfileInput, LoginInput } from '../schemas/auth.schema.js';
 import { config } from '../config.js';
 
-export async function register(input: RegisterInput): Promise<{ user: Profile; token: string }> {
+export interface AuthRegistrationResult {
+  user: Profile;
+  profile: Profile;
+  token: string;
+  verification_request: VerificationRequest | null;
+}
+
+export async function registerProfile(input: RegisterProfileInput): Promise<AuthRegistrationResult> {
+  // Explicit security rule: Never allow admin registration
+  if ((input.role as string) === 'admin') {
+    throw new AppError('Admin registration is not permitted', 403, 'FORBIDDEN');
+  }
+
   // Check if email already registered
   let existing: Profile | null = null;
   if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
@@ -20,10 +32,10 @@ export async function register(input: RegisterInput): Promise<{ user: Profile; t
     throw new AppError('Email address is already in use', 409, 'EMAIL_EXISTS');
   }
 
-  const userId = crypto.randomUUID();
+  const userId = input.user_id || crypto.randomUUID();
   const now = new Date().toISOString();
 
-  // Founders are verified by default; investors, mentors, incubators start as pending verification
+  // Founders are approved immediately; other roles start as pending
   const isFounder = input.role === 'founder';
   const verificationStatus = isFounder ? 'verified' : 'pending';
 
@@ -72,6 +84,42 @@ export async function register(input: RegisterInput): Promise<{ user: Profile; t
     savedProfile = inMemoryDb.saveProfile(newProfile);
   }
 
+  // Initialize role profile
+  if (savedProfile.role === 'investor') {
+    inMemoryDb.saveInvestorProfile({
+      user_id: savedProfile.id,
+      investment_thesis: savedProfile.bio,
+      ticket_size_min: 0,
+      ticket_size_max: 0,
+      preferred_sectors: [],
+      preferred_stages: [],
+      preferred_locations: [],
+      created_at: now,
+      updated_at: now,
+    });
+  } else if (savedProfile.role === 'mentor') {
+    inMemoryDb.saveMentorProfile({
+      user_id: savedProfile.id,
+      expertise_areas: [],
+      years_of_experience: 0,
+      mentoring_topics: [],
+      linkedin_url: savedProfile.website,
+      created_at: now,
+      updated_at: now,
+    });
+  } else if (savedProfile.role === 'incubator') {
+    inMemoryDb.saveIncubatorProfile({
+      user_id: savedProfile.id,
+      organization_name: savedProfile.organization || savedProfile.full_name,
+      website: savedProfile.website,
+      program_types: [],
+      cohort_size: 0,
+      created_at: now,
+      updated_at: now,
+    });
+  }
+
+  let verificationRequest: VerificationRequest | null = null;
   // Create verification request queue item for non-founders
   if (!isFounder) {
     const vReq: VerificationRequest = {
@@ -87,6 +135,7 @@ export async function register(input: RegisterInput): Promise<{ user: Profile; t
       created_at: now,
       updated_at: now,
     };
+    verificationRequest = vReq;
 
     if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
       await query(
@@ -105,7 +154,16 @@ export async function register(input: RegisterInput): Promise<{ user: Profile; t
     role: savedProfile.role,
   });
 
-  return { user: savedProfile, token };
+  return {
+    user: savedProfile,
+    profile: savedProfile,
+    token,
+    verification_request: verificationRequest,
+  };
+}
+
+export async function register(input: RegisterInput): Promise<AuthRegistrationResult> {
+  return registerProfile(input as RegisterProfileInput);
 }
 
 export async function login(input: LoginInput): Promise<{ user: Profile; token: string }> {

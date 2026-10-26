@@ -331,3 +331,172 @@ Approves or rejects a verification request. Automatically synchronizes the targe
   }
 }
 ```
+
+---
+
+## Iteration 3: Authentication, Roles, Profiles & Admin Verification
+
+### 1. Supabase Auth Integration & Flows
+
+Credentials and core auth lifecycle events are managed using **Supabase Auth (`@supabase/supabase-js`)**.
+
+#### A. Sign-up & Email Confirmation Flow
+1. **Frontend Registration**:
+   - The user selects their role (`founder`, `investor`, `mentor`, `incubator`) via the UI role picker.
+   - The browser invokes `supabase.auth.signUp({ email, password, options: { data: { full_name, role } } })`.
+   - Supabase Auth creates the credential record in `auth.users` and dispatches a verification email containing a confirmation link with an HMAC token.
+2. **Profile Creation**:
+   - The client (or server webhook) invokes `POST /api/v1/auth/register-profile` with the registration details.
+   - If the role is `founder`: The account is immediately marked `verification_status: "verified"`.
+   - If the role is `investor`, `mentor`, or `incubator`: The account is set to `verification_status: "pending"` and enqueued in `verification_requests`.
+   - Requesting `role: "admin"` is strictly prohibited and returns `403 FORBIDDEN`.
+3. **Email Confirmation**:
+   - Clicking the verification link confirms `email_confirmed_at` in Supabase Auth.
+   - Supabase redirects the user to the configured callback route with an access token / refresh token hash.
+
+#### B. Password Reset Flow
+1. **Initiation**:
+   - User inputs their email on the Forgot Password modal and submits.
+   - Frontend invokes `supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/auth/callback?type=recovery` })`.
+2. **Email Delivery**:
+   - Supabase Auth emails a cryptographically secure, time-limited recovery link containing an access OTP.
+3. **Password Update**:
+   - The recovery link directs the user back to the application with a temporary recovery session.
+   - The frontend detects the `PASSWORD_RECOVERY` auth event from `supabase.auth.onAuthStateChange`.
+   - The user enters their new password, which is committed via `supabase.auth.updateUser({ password: newPassword })`.
+   - The password is updated using bcrypt/Argon2 hashing, and old sessions are invalidated.
+
+---
+
+### 2. Authentication & Authorization Middleware
+
+1. **`authenticate`**:
+   - Extracts `Bearer <token>` from the `Authorization` header.
+   - Verifies the signature using `SUPABASE_JWT_SECRET`.
+   - Queries the database for the active profile matching `sub` (user ID).
+   - Rejects missing or tampered tokens with `401 UNAUTHORIZED`.
+   - Rejects expired tokens with `401 TOKEN_EXPIRED`.
+   - Rejects suspended accounts with `403 ACCOUNT_SUSPENDED`.
+2. **`requireRole(...roles)`**:
+   - Inspects `req.user.role` loaded from the database.
+   - Rejects unauthorized roles with `403 FORBIDDEN`.
+3. **`requireVerified`**:
+   - Rejects accounts with `verification_status !== 'verified'` (except for `admin`) with `403 UNVERIFIED_ACCOUNT`.
+
+---
+
+### 3. Profile & Role Endpoints
+
+#### `POST /api/v1/auth/register-profile`
+Registers a profile and role-specific sub-record after Supabase Auth sign-up.
+- **Auth**: None (or Supabase Auth session)
+- **Request Body**:
+```json
+{
+  "email": "investor@example.com",
+  "password": "SecurePassword123!",
+  "full_name": "Vikram Seth",
+  "role": "investor",
+  "organization": "Apex Capital",
+  "is_student": false
+}
+```
+- **Response**: `201 Created`
+```json
+{
+  "data": {
+    "user": {
+      "id": "i0000000-0000-0000-0000-000000000001",
+      "email": "investor@example.com",
+      "full_name": "Vikram Seth",
+      "role": "investor",
+      "verification_status": "pending"
+    },
+    "token": "eyJhbGciOiJIUzI1Ni...",
+    "verification_request": {
+      "id": "e0000000-0000-0000-0000-000000000001",
+      "role_requested": "investor",
+      "status": "pending"
+    }
+  }
+}
+```
+
+#### `GET /api/v1/me`
+Retrieves current authenticated profile.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `PATCH /api/v1/me`
+Updates editable fields on user profile. Attempted role escalation (`role` field) is ignored/blocked.
+- **Auth**: `Bearer <token>`
+- **Request Body**:
+```json
+{
+  "full_name": "Vikram Seth, Managing Partner",
+  "bio": "Early stage FinTech & AgriTech investor",
+  "location": "Bengaluru, India",
+  "website": "https://apexcap.example.com"
+}
+```
+- **Response**: `200 OK`
+
+#### Role-Specific Profile Endpoints
+All role profile endpoints require `authenticate`:
+- **`GET /api/v1/me/founder-profile`** & **`PUT /api/v1/me/founder-profile`**
+- **`GET /api/v1/me/investor-profile`** & **`PUT /api/v1/me/investor-profile`**
+- **`GET /api/v1/me/mentor-profile`** & **`PUT /api/v1/me/mentor-profile`**
+- **`GET /api/v1/me/incubator-profile`** & **`PUT /api/v1/me/incubator-profile`**
+
+Example Investor Profile Update (`PUT /api/v1/me/investor-profile`):
+```json
+{
+  "firm_name": "Apex Capital",
+  "investment_thesis": "Seed and Series A AgriTech & Climate Tech ventures",
+  "min_ticket_size": 1000000,
+  "max_ticket_size": 5000000,
+  "target_sectors": ["AgriTech", "Climate Tech"],
+  "target_stages": ["Seed", "Early traction"]
+}
+```
+
+---
+
+### 4. Admin Verification Endpoints & Audit Logging
+
+#### `GET /api/v1/admin/verifications`
+Filters pending or reviewed applications by `role` and `status`.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Query Params**: `?role=investor&status=pending`
+
+#### `POST /api/v1/admin/verifications/:id/approve`
+Approves an applicant, updates their `verification_status` to `verified`, and logs the action to `audit_logs`.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Request Body**:
+```json
+{
+  "notes": "Verified SEBI angel network membership"
+}
+```
+- **Response**: `200 OK`
+
+#### `POST /api/v1/admin/verifications/:id/reject`
+Rejects an applicant with a mandatory rejection reason, sets status to `rejected`, and writes an audit log.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Request Body**:
+```json
+{
+  "reason": "Provided fund registration number could not be verified on the regulator registry."
+}
+```
+- **Response**: `200 OK`
+
+#### Audit Logging (`audit_logs`)
+Every administrative action (`VERIFICATION_APPROVED`, `VERIFICATION_REJECTED`, `USER_SUSPENDED`, `USER_ACTIVATED`) is permanently recorded in `audit_logs` with:
+- `actor_id`: Admin's user UUID.
+- `action`: Action identifier.
+- `target_type`: E.g. `verification_request`, `user`.
+- `target_id`: ID of target entity.
+- `metadata`: JSON payload containing rejection reason, approval notes, or status changes.
+- `created_at`: Timestamp.
+

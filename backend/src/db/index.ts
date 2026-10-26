@@ -1,7 +1,15 @@
 import pg from 'pg';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
-import type { Profile, VerificationRequest, UserRole } from './types.js';
+import type {
+  Profile,
+  VerificationRequest,
+  UserRole,
+  InvestorProfile,
+  MentorProfile,
+  IncubatorProfile,
+  AuditLog,
+} from './types.js';
 
 const { Pool } = pg;
 
@@ -138,6 +146,10 @@ const initialVerificationRequests: VerificationRequest[] = [
 class InMemoryDatabase {
   profiles: Map<string, Profile> = new Map();
   verificationRequests: Map<string, VerificationRequest> = new Map();
+  investorProfiles: Map<string, InvestorProfile> = new Map();
+  mentorProfiles: Map<string, MentorProfile> = new Map();
+  incubatorProfiles: Map<string, IncubatorProfile> = new Map();
+  auditLogs: AuditLog[] = [];
 
   constructor() {
     this.reset();
@@ -146,12 +158,50 @@ class InMemoryDatabase {
   reset() {
     this.profiles.clear();
     this.verificationRequests.clear();
+    this.investorProfiles.clear();
+    this.mentorProfiles.clear();
+    this.incubatorProfiles.clear();
+    this.auditLogs = [];
+
     for (const p of initialProfiles) {
       this.profiles.set(p.id, { ...p });
     }
     for (const v of initialVerificationRequests) {
       this.verificationRequests.set(v.id, { ...v });
     }
+
+    // Seed role profiles for initial users
+    this.investorProfiles.set('i0000000-0000-0000-0000-000000000001', {
+      user_id: 'i0000000-0000-0000-0000-000000000001',
+      investment_thesis: 'Early-stage climate, agriculture, and applied AI in India.',
+      ticket_size_min: 1000000,
+      ticket_size_max: 5000000,
+      preferred_sectors: ['AgriTech', 'Climate Tech', 'AI'],
+      preferred_stages: ['Pre-seed', 'Seed'],
+      preferred_locations: ['India'],
+      created_at: new Date('2026-10-25T10:00:00Z').toISOString(),
+      updated_at: new Date('2026-10-25T10:00:00Z').toISOString(),
+    });
+
+    this.mentorProfiles.set('m0000000-0000-0000-0000-000000000001', {
+      user_id: 'm0000000-0000-0000-0000-000000000001',
+      expertise_areas: ['Startup strategy', 'Go-to-market', 'Deep science'],
+      years_of_experience: 12,
+      mentoring_topics: ['Pricing model', 'Pilot planning', 'Fundraising prep'],
+      linkedin_url: 'https://linkedin.com/in/kavitamehra-demo',
+      created_at: new Date('2026-10-24T10:00:00Z').toISOString(),
+      updated_at: new Date('2026-10-24T10:00:00Z').toISOString(),
+    });
+
+    this.incubatorProfiles.set('c0000000-0000-0000-0000-000000000001', {
+      user_id: 'c0000000-0000-0000-0000-000000000001',
+      organization_name: 'Punjab Innovation Hub',
+      website: 'https://punjabinnovation.example.com',
+      program_types: ['Campus Fellowship', 'Pre-incubation', 'Prototype Grants'],
+      cohort_size: 25,
+      created_at: new Date('2026-10-12T10:00:00Z').toISOString(),
+      updated_at: new Date('2026-10-12T10:00:00Z').toISOString(),
+    });
   }
 
   getProfileById(id: string): Profile | null {
@@ -214,11 +264,15 @@ class InMemoryDatabase {
   listVerificationRequests(options: {
     page: number;
     limit: number;
+    role?: UserRole;
     status?: string;
   }): { requests: VerificationRequest[]; total: number } {
     let list = Array.from(this.verificationRequests.values());
     if (options.status) {
       list = list.filter((v) => v.status === options.status);
+    }
+    if (options.role) {
+      list = list.filter((v) => v.role_requested === options.role);
     }
     list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     const total = list.length;
@@ -235,6 +289,49 @@ class InMemoryDatabase {
     const clone = { ...req, updated_at: new Date().toISOString() };
     this.verificationRequests.set(clone.id, clone);
     return { ...clone };
+  }
+
+  getInvestorProfile(userId: string): InvestorProfile | null {
+    const inv = this.investorProfiles.get(userId);
+    return inv ? { ...inv } : null;
+  }
+
+  saveInvestorProfile(profile: InvestorProfile): InvestorProfile {
+    const clone = { ...profile, updated_at: new Date().toISOString() };
+    this.investorProfiles.set(clone.user_id, clone);
+    return { ...clone };
+  }
+
+  getMentorProfile(userId: string): MentorProfile | null {
+    const men = this.mentorProfiles.get(userId);
+    return men ? { ...men } : null;
+  }
+
+  saveMentorProfile(profile: MentorProfile): MentorProfile {
+    const clone = { ...profile, updated_at: new Date().toISOString() };
+    this.mentorProfiles.set(clone.user_id, clone);
+    return { ...clone };
+  }
+
+  getIncubatorProfile(userId: string): IncubatorProfile | null {
+    const inc = this.incubatorProfiles.get(userId);
+    return inc ? { ...inc } : null;
+  }
+
+  saveIncubatorProfile(profile: IncubatorProfile): IncubatorProfile {
+    const clone = { ...profile, updated_at: new Date().toISOString() };
+    this.incubatorProfiles.set(clone.user_id, clone);
+    return { ...clone };
+  }
+
+  createAuditLog(log: AuditLog): AuditLog {
+    const clone = { ...log, created_at: new Date().toISOString() };
+    this.auditLogs.unshift(clone);
+    return { ...clone };
+  }
+
+  listAuditLogs(): AuditLog[] {
+    return [...this.auditLogs];
   }
 }
 

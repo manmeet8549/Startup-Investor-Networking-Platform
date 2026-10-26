@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { inMemoryDb, query } from '../db/index.js';
-import type { Profile, VerificationRequest } from '../db/types.js';
+import type { Profile, VerificationRequest, AuditLog } from '../db/types.js';
 import { AppError } from '../middleware/error.middleware.js';
 import type {
   ListUsersQuery,
@@ -9,6 +10,44 @@ import type {
 } from '../schemas/admin.schema.js';
 import { getProfile } from './profile.service.js';
 import { config } from '../config.js';
+
+export async function logAdminAction(
+  adminId: string,
+  action: string,
+  targetType: string,
+  targetId?: string,
+  details?: Record<string, unknown>
+): Promise<AuditLog> {
+  const auditLog: AuditLog = {
+    id: randomUUID(),
+    admin_id: adminId,
+    action,
+    target_type: targetType,
+    target_id: targetId || null,
+    details: details || null,
+    created_at: new Date().toISOString(),
+  };
+
+  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+    await query(
+      `INSERT INTO public.audit_logs (id, admin_id, action, target_type, target_id, details, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        auditLog.id,
+        auditLog.admin_id,
+        auditLog.action,
+        auditLog.target_type,
+        auditLog.target_id,
+        auditLog.details ? JSON.stringify(auditLog.details) : null,
+        auditLog.created_at,
+      ]
+    );
+  } else {
+    inMemoryDb.createAuditLog(auditLog);
+  }
+
+  return auditLog;
+}
 
 export async function listUsers(params: ListUsersQuery): Promise<{
   users: Profile[];
@@ -122,14 +161,21 @@ export async function listVerificationRequests(params: ListVerificationsQuery): 
     let idx = 1;
 
     if (params.status) {
-      conditions.push(`status = $${idx++}`);
+      conditions.push(`vr.status = $${idx++}`);
       values.push(params.status);
+    }
+    if (params.role) {
+      conditions.push(`(vr.role_requested = $${idx} OR p.role = $${idx})`);
+      values.push(params.role);
+      idx++;
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countRes = await query<{ count: string }>(
-      `SELECT COUNT(*) FROM public.verification_requests ${whereClause}`,
+      `SELECT COUNT(*) FROM public.verification_requests vr
+       LEFT JOIN public.profiles p ON vr.user_id = p.id
+       ${whereClause}`,
       values
     );
     const total = parseInt(countRes.rows[0]?.count || '0', 10);
@@ -137,9 +183,10 @@ export async function listVerificationRequests(params: ListVerificationsQuery): 
     const offset = (page - 1) * limit;
     values.push(limit, offset);
     const sql = `
-      SELECT * FROM public.verification_requests
+      SELECT vr.* FROM public.verification_requests vr
+      LEFT JOIN public.profiles p ON vr.user_id = p.id
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY vr.created_at DESC
       LIMIT $${idx++} OFFSET $${idx++};
     `;
 
@@ -156,6 +203,7 @@ export async function listVerificationRequests(params: ListVerificationsQuery): 
     page,
     limit,
     status: params.status,
+    role: params.role,
   });
 
   const total_pages = Math.ceil(total / limit) || 1;
@@ -166,10 +214,10 @@ export async function listVerificationRequests(params: ListVerificationsQuery): 
   };
 }
 
-export async function reviewVerification(
+export async function approveVerification(
   requestId: string,
   adminId: string,
-  input: ReviewVerificationInput
+  notes?: string
 ): Promise<{ request: VerificationRequest; user: Profile }> {
   let reqItem: VerificationRequest | null = null;
 
@@ -190,16 +238,15 @@ export async function reviewVerification(
   const now = new Date().toISOString();
   const updatedReq: VerificationRequest = {
     ...reqItem,
-    status: input.status,
+    status: 'verified',
     reviewed_by: adminId,
     reviewed_at: now,
-    admin_notes: input.admin_notes ?? null,
+    admin_notes: notes ?? null,
     updated_at: now,
   };
 
-  // Update user profile verification_status
   const updatedUser = await updateUserStatus(reqItem.user_id, {
-    verification_status: input.status,
+    verification_status: 'verified',
   });
 
   let savedReq: VerificationRequest;
@@ -227,5 +274,92 @@ export async function reviewVerification(
     savedReq = inMemoryDb.updateVerificationRequest(updatedReq);
   }
 
+  await logAdminAction(adminId, 'VERIFICATION_APPROVED', 'verification_request', requestId, {
+    user_id: reqItem.user_id,
+    role_requested: reqItem.role_requested,
+    notes,
+  });
+
   return { request: savedReq, user: updatedUser };
+}
+
+export async function rejectVerification(
+  requestId: string,
+  adminId: string,
+  reason: string
+): Promise<{ request: VerificationRequest; user: Profile }> {
+  let reqItem: VerificationRequest | null = null;
+
+  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+    const res = await query<VerificationRequest>(
+      'SELECT * FROM public.verification_requests WHERE id = $1 LIMIT 1',
+      [requestId]
+    );
+    if (res.rows.length > 0) reqItem = res.rows[0];
+  } else {
+    reqItem = inMemoryDb.getVerificationRequestById(requestId);
+  }
+
+  if (!reqItem) {
+    throw new AppError('Verification request not found', 404, 'NOT_FOUND');
+  }
+
+  const now = new Date().toISOString();
+  const updatedReq: VerificationRequest = {
+    ...reqItem,
+    status: 'rejected',
+    reviewed_by: adminId,
+    reviewed_at: now,
+    admin_notes: reason,
+    updated_at: now,
+  };
+
+  const updatedUser = await updateUserStatus(reqItem.user_id, {
+    verification_status: 'rejected',
+  });
+
+  let savedReq: VerificationRequest;
+  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+    const sql = `
+      UPDATE public.verification_requests SET
+        status = $1,
+        reviewed_by = $2,
+        reviewed_at = $3,
+        admin_notes = $4,
+        updated_at = $5
+      WHERE id = $6
+      RETURNING *;
+    `;
+    const res = await query<VerificationRequest>(sql, [
+      updatedReq.status,
+      updatedReq.reviewed_by,
+      updatedReq.reviewed_at,
+      updatedReq.admin_notes,
+      updatedReq.updated_at,
+      requestId,
+    ]);
+    savedReq = res.rows[0];
+  } else {
+    savedReq = inMemoryDb.updateVerificationRequest(updatedReq);
+  }
+
+  await logAdminAction(adminId, 'VERIFICATION_REJECTED', 'verification_request', requestId, {
+    user_id: reqItem.user_id,
+    role_requested: reqItem.role_requested,
+    reason,
+  });
+
+  return { request: savedReq, user: updatedUser };
+}
+
+export async function reviewVerification(
+  requestId: string,
+  adminId: string,
+  input: ReviewVerificationInput
+): Promise<{ request: VerificationRequest; user: Profile }> {
+  if (input.status === 'verified') {
+    return approveVerification(requestId, adminId, input.admin_notes || undefined);
+  } else {
+    return rejectVerification(requestId, adminId, input.admin_notes || 'Application rejected by administrator');
+  }
 }
