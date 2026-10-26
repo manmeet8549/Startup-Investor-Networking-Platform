@@ -260,6 +260,8 @@ export interface MatchScore {
   funding_score: number;
   location_score: number;
   model_score: number;
+  reasons?: string[];
+  breakdown?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }

@@ -829,5 +829,158 @@ Returns distinct startup locations with active listed startup counts.
 }
 ```
 
+---
 
+## Endpoints (Iteration 6: Investor Preferences & Transparent Smart Matching)
 
+### 1. Investor Preferences
+
+#### `GET /api/v1/investors/preferences`
+Retrieves the investment preferences and mandate for the authenticated investor.
+- **Auth**: `Bearer <token>` (`investor` or `admin` role required)
+- **Response**: `200 OK`
+```json
+{
+  "data": {
+    "firm_name": "Northstar Ventures",
+    "sectors": ["AgriTech", "Climate Tech"],
+    "stages": ["mvp", "early_traction"],
+    "ticket_min": 1000000,
+    "ticket_max": 5000000,
+    "regions": ["Punjab", "India"],
+    "business_models": ["B2B"],
+    "thesis": "Early-stage agritech and climate hardware with proven field pilots."
+  }
+}
+```
+
+#### `PUT /api/v1/investors/preferences`
+Updates the investment preferences. Validates constraints and invalidates cached scores in `match_scores` for this investor.
+- **Auth**: `Bearer <token>` (`investor` or `admin` role required)
+- **Validation**:
+  - `sectors`: Non-empty array of strings.
+  - `stages`: Non-empty array of valid stages (`idea`, `validation`, `mvp`, `early_traction`, `growth`).
+  - `ticket_min`: Number >= 0.
+  - `ticket_max`: Number >= `ticket_min`.
+  - `regions`: Array of strings (optional).
+  - `business_models`: Array of strings (optional).
+  - `thesis`: Optional string.
+  - `firm_name`: Optional string.
+- **Response**: `200 OK`
+
+---
+
+### 2. Pure Matching Engine (`/backend/src/matching/score.ts`)
+
+Pure mathematical engine with **zero database dependencies**.
+- Configurable weights summing to 100:
+  - **Industry (30%)**: Share of startup's sectors covered by investor (`intersection / startup_sectors`).
+  - **Stage (25%)**: Exact match = 100, adjacent stage in progression = 50, otherwise = 0.
+  - **Funding Ask (20%)**: 100 if ask is within `[ticket_min, ticket_max]`; below min = `100 * ask / ticket_min`; above max = `100 * ticket_max / ask`.
+  - **Location (15%)**: Same city = 100, same state = 80, same country = 60, investor open to any region = 60, otherwise = 0.
+  - **Business Model (10%)**: Share of overlap; neutral 50 if investor has no preference specified.
+- Mandatory disclaimer included in all outputs:
+  > *"The score measures profile compatibility, not the probability of funding."*
+- Deterministic ordering: Sorted by `score DESC`, tie-broken by `id ASC`.
+
+---
+
+### 3. Smart Matching Endpoints
+
+#### `GET /api/v1/matches/investors?startup_id=<uuid>`
+Founder flow: Retrieves ranked verified investors compatible with the startup.
+- **Auth**: `Bearer <token>` (`founder` or `admin` role required)
+- **Query Parameters**:
+  - `startup_id` (required): UUID of the startup. Caller must be the startup owner or admin.
+  - `page`: 1-based page index (default: `1`).
+  - `limit`: Page size (default: `20`, max: `100`).
+- **Security**: Only verified investors are returned.
+- **Response**: `200 OK`
+```json
+{
+  "data": [
+    {
+      "investor_id": "i0000000-0000-0000-0000-000000000001",
+      "firm_name": "Northstar Ventures",
+      "location": "Chandigarh, India",
+      "sectors": ["AgriTech", "Climate Tech"],
+      "stages": ["mvp", "early_traction"],
+      "ticket_min": 1000000,
+      "ticket_max": 5000000,
+      "score": 97,
+      "breakdown": {
+        "industry": 100,
+        "stage": 100,
+        "funding": 100,
+        "location": 80,
+        "business_model": 100
+      },
+      "reasons": [
+        "Matches 2 of 2 sectors (AgriTech, Climate Tech)",
+        "Exact stage match for MVP",
+        "Funding ask of ₹15 Lakh is within ticket range (₹10 Lakh - ₹50 Lakh)",
+        "Same state match (Punjab)",
+        "Overlaps business model (B2B)"
+      ],
+      "disclaimer": "The score measures profile compatibility, not the probability of funding."
+    }
+  ],
+  "disclaimer": "The score measures profile compatibility, not the probability of funding.",
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 3,
+    "total_pages": 1
+  }
+}
+```
+
+#### `GET /api/v1/matches/startups`
+Investor flow: Retrieves ranked listed startups compatible with the authenticated investor's preferences.
+- **Auth**: `Bearer <token>` (`investor` or `admin` role required)
+- **Query Parameters**:
+  - `page`: 1-based page index (default: `1`).
+  - `limit`: Page size (default: `20`, max: `100`).
+- **Security & Visibility**:
+  - Private startups (`visibility = 'private'`) and hidden startups (`is_hidden = true`) are excluded.
+  - Only startups with approved/verified founders are matched.
+- **Response**: `200 OK`
+```json
+{
+  "data": [
+    {
+      "startup_id": "s0000000-0000-0000-0000-000000000001",
+      "name": "FarmSense",
+      "tagline": "Practical intelligence for every farmer.",
+      "sectors": ["AgriTech", "Climate Tech"],
+      "stage": "mvp",
+      "funding_ask": 1500000,
+      "location": "Ludhiana, Punjab, India",
+      "business_model": "B2B",
+      "score": 97,
+      "breakdown": {
+        "industry": 100,
+        "stage": 100,
+        "funding": 100,
+        "location": 80,
+        "business_model": 100
+      },
+      "reasons": [
+        "Matches 2 of 2 sectors (AgriTech, Climate Tech)",
+        "Exact stage match for MVP",
+        "Funding ask of ₹15 Lakh is within ticket range (₹10 Lakh - ₹50 Lakh)",
+        "Same state match (Punjab)",
+        "Overlaps business model (B2B)"
+      ],
+      "disclaimer": "The score measures profile compatibility, not the probability of funding."
+    }
+  ],
+  "disclaimer": "The score measures profile compatibility, not the probability of funding.",
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 5,
+    "total_pages": 1
+  }
+}
+```

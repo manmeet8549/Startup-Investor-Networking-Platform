@@ -5,12 +5,12 @@ import type {
   Profile,
   VerificationRequest,
   UserRole,
-  InvestorProfile,
   MentorProfile,
   IncubatorProfile,
   AuditLog,
 } from './types.js';
 import type {
+  InvestorProfile,
   FounderProfile,
   Startup,
   StartupTeamMember,
@@ -143,17 +143,7 @@ class InMemoryDatabase {
       this.founderProfiles.set(fp.user_id, { ...fp });
     }
     for (const ip of seedInvestorProfiles) {
-      this.investorProfiles.set(ip.user_id, {
-        user_id: ip.user_id,
-        investment_thesis: ip.thesis || null,
-        ticket_size_min: ip.ticket_min,
-        ticket_size_max: ip.ticket_max,
-        preferred_sectors: ip.sectors,
-        preferred_stages: ip.stages,
-        preferred_locations: ip.regions,
-        created_at: ip.created_at,
-        updated_at: ip.updated_at,
-      });
+      this.investorProfiles.set(ip.user_id, { ...ip });
     }
     for (const mp of seedMentorProfiles) {
       this.mentorProfiles.set(mp.user_id, {
@@ -314,18 +304,80 @@ class InMemoryDatabase {
     return inv ? { ...inv } : null;
   }
 
-  saveInvestorProfile(profile: InvestorProfile): InvestorProfile {
-    // Constraint check: ticket_size_min <= ticket_size_max
-    if (
-      profile.ticket_size_min !== undefined &&
-      profile.ticket_size_max !== undefined &&
-      profile.ticket_size_min > profile.ticket_size_max
-    ) {
+  saveInvestorProfile(profile: InvestorProfile | any): InvestorProfile {
+    const min = profile.ticket_min ?? profile.ticket_size_min;
+    const max = profile.ticket_max ?? profile.ticket_size_max;
+    // Constraint check: ticket_min <= ticket_max
+    if (min !== undefined && max !== undefined && min > max) {
       throw new Error('check_ticket_range: ticket_min must be less than or equal to ticket_max');
     }
-    const clone = { ...profile, updated_at: new Date().toISOString() };
+    const clone = {
+      ...profile,
+      ticket_min: min ?? 0,
+      ticket_max: max ?? 0,
+      updated_at: new Date().toISOString(),
+    };
     this.investorProfiles.set(clone.user_id, clone);
+    this.invalidateMatchesForInvestor(clone.user_id);
     return { ...clone };
+  }
+
+  // --- Investor Matching & Preferences ---
+  listVerifiedInvestors(): Array<{ profile: Profile; investorProfile: InvestorProfile }> {
+    const results: Array<{ profile: Profile; investorProfile: InvestorProfile }> = [];
+    for (const [id, p] of this.profiles.entries()) {
+      if (
+        p.role === 'investor' &&
+        p.status !== 'suspended' &&
+        ((p.verification_status as string) === 'verified' || (p.verification_status as string) === 'approved')
+      ) {
+        const ip = this.investorProfiles.get(id) || {
+          user_id: id,
+          firm_name: p.organization || p.full_name,
+          sectors: [],
+          stages: [],
+          ticket_min: 0,
+          ticket_max: 0,
+          regions: [],
+          business_models: [],
+          thesis: p.bio,
+          accredited: true,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+        };
+        results.push({ profile: { ...p }, investorProfile: { ...ip } });
+      }
+    }
+    return results;
+  }
+
+  saveMatchScore(score: MatchScore): MatchScore {
+    const key = `${score.investor_id}:${score.startup_id}`;
+    const clone = { ...score, updated_at: new Date().toISOString() };
+    this.matchScores.set(key, clone);
+    return { ...clone };
+  }
+
+  getCachedMatchScore(investorId: string, startupId: string): MatchScore | null {
+    const key = `${investorId}:${startupId}`;
+    const score = this.matchScores.get(key);
+    return score ? { ...score } : null;
+  }
+
+  invalidateMatchesForInvestor(investorId: string): void {
+    for (const [key, s] of this.matchScores.entries()) {
+      if (s.investor_id === investorId) {
+        this.matchScores.delete(key);
+      }
+    }
+  }
+
+  invalidateMatchesForStartup(startupId: string): void {
+    for (const [key, s] of this.matchScores.entries()) {
+      if (s.startup_id === startupId) {
+        this.matchScores.delete(key);
+      }
+    }
   }
 
   getMentorProfile(userId: string): MentorProfile | null {
@@ -722,10 +774,12 @@ class InMemoryDatabase {
       updated_at: new Date().toISOString(),
     };
     this.startups.set(id, updated);
+    this.invalidateMatchesForStartup(id);
     return { ...updated };
   }
 
   deleteStartup(id: string): boolean {
+    this.invalidateMatchesForStartup(id);
     return this.startups.delete(id);
   }
 

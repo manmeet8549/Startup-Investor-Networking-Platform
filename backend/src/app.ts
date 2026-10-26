@@ -14,6 +14,7 @@ import { adminRouter } from './routes/admin.routes.js';
 import { startupRouter } from './routes/startup.routes.js';
 import { documentRouter } from './routes/document.routes.js';
 import { metaRouter } from './routes/meta.routes.js';
+import { matchingRouter, investorRouter } from './routes/matching.routes.js';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware.js';
 import { config } from './config.js';
 
@@ -81,6 +82,8 @@ apiRouter.use('/admin', adminRouter);
 apiRouter.use(startupRouter);
 apiRouter.use(documentRouter);
 apiRouter.use(metaRouter);
+apiRouter.use('/matches', matchingRouter);
+apiRouter.use('/investors', investorRouter);
 
 app.use('/api/v1', apiRouter);
 

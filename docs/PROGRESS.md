@@ -9,7 +9,7 @@
 | **Iteration 3** | **Authentication, Roles, Profiles & Admin Verification (Supabase Auth)** | **Completed** |
 | **Iteration 4** | **Startup Profiles, Team CRUD, Pitch Decks, Supabase Storage & Access Control** | **Completed** |
 | **Iteration 5** | **Discovery, Search, Multi-Filters, Query Optimization & Dynamic Frontend** | **Completed** |
-| **Iteration 6** | Weighted Investor Matching Engine & Deal Pipeline | Planned |
+| **Iteration 6** | **Investor Preferences, Transparent Smart Matching & Re-ranking** | **Completed** |
 | **Iteration 7** | Mentorship Requests & Incubator Programs Lifecycle | Planned |
 
 ---
@@ -208,6 +208,56 @@
      - 500 seeded rows query performance benchmark.
    - Entire backend test suite: **90 passing tests across 7 test suites** (0 failures).
    - Frontend Next.js production build: compiles and generates static pages cleanly with zero TypeScript errors.
+
+---
+
+---
+
+## Iteration 6 Details
+
+### Completed Deliverables
+1. **Investor Preferences Endpoints & Validation (`/api/v1/investors/preferences`)**:
+   - `GET /api/v1/investors/preferences`: Fetches investor preferences (`sectors`, `stages`, `ticket_min`, `ticket_max`, `regions`, `business_models`, `thesis`, `firm_name`).
+   - `PUT /api/v1/investors/preferences`: Validates schema via Zod (`ticket_min <= ticket_max`, non-empty arrays), updates DB record, and invalidates cached scores in `match_scores`.
+2. **Pure Mathematical Matching Module (`backend/src/matching/score.ts`)**:
+   - Pure module with zero database or network calls.
+   - Weights sum to 100: Industry 30, Stage 25, Funding 20, Location 15, Business Model 10.
+   - Criterion 0-100 logic:
+     - **Industry (30%)**: Share of startup sectors covered by investor.
+     - **Stage (25%)**: Exact match = 100, adjacent stage in canonical progression (`idea -> validation -> mvp -> early_traction -> growth`) = 50, otherwise = 0.
+     - **Funding (20%)**: Inside ticket range = 100; below min = `100 * ask / min`; above max = `100 * max / ask`.
+     - **Location (15%)**: Same city = 100, same state = 80, country = 60, investor open to any region = 60, otherwise = 0.
+     - **Business Model (10%)**: Share of overlap; neutral 50 if investor has no preference specified.
+   - Plain language `reasons[]` array explaining specific matches and misalignments.
+   - Transparent disclaimer: *"The score measures profile compatibility, not the probability of funding."*
+3. **Ranked Bidirectional Matching Endpoints**:
+   - `GET /api/v1/matches/investors?startup_id=`: Founder flow, returns ranked verified investors with compatibility score, breakdown, reasons, and disclaimer.
+   - `GET /api/v1/matches/startups`: Investor flow, returns ranked listed startups according to investor's preferences.
+   - PostgreSQL cache layer in `match_scores` with auto-invalidation on startup update or investor preference update.
+   - Deterministic tie-breaking on score equality by ID.
+4. **Frontend Dynamic Integration (`frontend/app/page.tsx`)**:
+   - **Founder Investor Matches (`page === 'Investor Matches'`)**:
+     - Dynamic listing of ranked verified investors.
+     - Disclaimer banner, compatibility percentage badge, plain language reasons with checkmarks.
+     - Expandable 5-criteria breakdown accordion with progress bars for each weight.
+   - **Founder Dashboard Card ("Top investor matches")**:
+     - Displays top 3 live investor matches with verified badges, fit percentages, and quick navigation.
+   - **Investor Recommended Startups (`page === 'Recommended Startups'`)**:
+     - Specialized screen displaying recommended startups ranked in real-time.
+     - Shows compatibility scores, criteria breakdown, and plain-language reasons.
+   - **Investor Preferences Form (`page === 'Investment Preferences'`)**:
+     - Interactive multi-select chips for sectors, stages, regions, and business models.
+     - Min/max ticket inputs with quick presets (Seed, Micro Angel, Pre-Series A, etc.) and validation.
+     - "Save preferences" and "Save & View Rankings" buttons that trigger immediate cache invalidation and re-ranking.
+5. **Automated Testing Suite (`backend/src/tests/iteration6.test.ts`)**:
+   - 39 tests with 100% pass rate:
+     - Pure scoring module tests covering all 5 criteria and boundary conditions.
+     - Configurable weights verify sum of 100.
+     - Seeded AgriTech MVP test: FarmSense in Punjab asking ₹15L correctly ranks Northstar Ventures first (score: 97%).
+     - Preference endpoint validation tests (ticket min > max rejected, empty sectors/stages rejected).
+     - Cache invalidation and recompute verification.
+     - Verified-only investor filtering test.
+     - Full test suite: **129 passing tests across 8 test suites** with zero failures.
 
 ---
 

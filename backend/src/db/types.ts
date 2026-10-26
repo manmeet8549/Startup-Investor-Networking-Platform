@@ -35,12 +35,21 @@ export interface VerificationRequest {
 
 export interface InvestorProfile {
   user_id: string;
-  investment_thesis: string | null;
-  ticket_size_min: number;
-  ticket_size_max: number;
-  preferred_sectors: string[];
-  preferred_stages: string[];
-  preferred_locations: string[];
+  firm_name?: string | null;
+  sectors?: string[];
+  stages?: string[];
+  ticket_min?: number;
+  ticket_max?: number;
+  regions?: string[];
+  business_models?: string[];
+  thesis?: string | null;
+  accredited?: boolean;
+  investment_thesis?: string | null;
+  ticket_size_min?: number;
+  ticket_size_max?: number;
+  preferred_sectors?: string[];
+  preferred_stages?: string[];
+  preferred_locations?: string[];
   created_at: string;
   updated_at: string;
 }

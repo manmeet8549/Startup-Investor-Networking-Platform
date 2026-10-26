@@ -76,6 +76,31 @@ function StartupCard({s,onOpen,onSave,saved}:{s:any;onOpen:()=>void;onSave:()=>v
   );
 }
 
+
+function ScoreCriterionBar({ label, weight, score }: { label: string; weight: number; score: number }) {
+  const tone = score >= 80 ? 'bg-emerald-600' : score >= 50 ? 'bg-amber-500' : 'bg-slate-300';
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="text-slate-600">{label} <span className="text-slate-400 font-normal">({weight}%)</span></span>
+        <span className="font-semibold text-ink">{score}/100</span>
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full ${tone} transition-all duration-300`} style={{ width: `${Math.min(100, Math.max(0, score))}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function MatchDisclaimer() {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3.5 py-2.5 text-xs text-amber-900">
+      <CircleHelp size={16} className="shrink-0 text-amber-700" />
+      <span><b>Disclaimer:</b> The score measures profile compatibility, not the probability of funding.</span>
+    </div>
+  );
+}
+
 function StartupSkeleton() {
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft animate-pulse flex flex-col justify-between min-h-[220px]">
@@ -238,6 +263,252 @@ export default function Home(){
  const [uploadVisibility, setUploadVisibility] = useState<'public' | 'access_controlled' | 'private'>('access_controlled');
 
  // Startup Edit & Team Member Forms
+
+  
+  // Iteration 6: Smart Matching & Investor Preferences States
+  const [founderMatches, setFounderMatches] = useState<any[]>([]);
+  const [founderMatchesLoading, setFounderMatchesLoading] = useState(false);
+  const [founderMatchesError, setFounderMatchesError] = useState<string | null>(null);
+
+  const [investorMatches, setInvestorMatches] = useState<any[]>([]);
+  const [investorMatchesLoading, setInvestorMatchesLoading] = useState(false);
+  const [investorMatchesError, setInvestorMatchesError] = useState<string | null>(null);
+
+  const [expandedBreakdown, setExpandedBreakdown] = useState<Record<string, boolean>>({});
+  const toggleBreakdown = (id: string) => {
+    setExpandedBreakdown(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const [investorPrefs, setInvestorPrefs] = useState<{
+    firm_name: string;
+    sectors: string[];
+    stages: string[];
+    ticket_min: number;
+    ticket_max: number;
+    regions: string[];
+    business_models: string[];
+    thesis: string;
+  }>({
+    firm_name: 'Northstar Ventures',
+    sectors: ['AgriTech', 'Climate Tech'],
+    stages: ['mvp', 'early_traction'],
+    ticket_min: 1000000,
+    ticket_max: 5000000,
+    regions: ['Punjab', 'India'],
+    business_models: ['B2B'],
+    thesis: 'Early-stage agritech and climate hardware with proven field pilots.',
+  });
+  const [savingPrefs, setSavingPrefs] = useState(false);
+
+  const fetchFounderMatches = useCallback(async (targetStartupId?: string) => {
+    try {
+      setFounderMatchesLoading(true);
+      setFounderMatchesError(null);
+      const stId = targetStartupId || currentStartup?.id || 's0000000-0000-0000-0000-000000000001';
+      const res = await apiClient.get<any[]>(`/matches/investors?startup_id=${stId}`);
+      if (res && res.data) {
+        setFounderMatches(res.data);
+      }
+    } catch (err: any) {
+      console.warn('Founder matches API notice:', err);
+      setFounderMatchesError(err.message || 'Unable to load live investor matches');
+      setFounderMatches([
+        {
+          investor_id: 'i0000000-0000-0000-0000-000000000001',
+          firm_name: 'Northstar Ventures',
+          location: 'Chandigarh, Punjab, India',
+          sectors: ['AgriTech', 'Climate Tech'],
+          stages: ['mvp', 'early_traction'],
+          ticket_min: 1000000,
+          ticket_max: 5000000,
+          score: 97,
+          breakdown: { industry: 100, stage: 100, funding: 100, location: 80, business_model: 100 },
+          reasons: [
+            'Matches 2 of 2 sectors (AgriTech, Climate Tech)',
+            'Exact stage match for MVP',
+            'Funding ask of ₹15 Lakh is within ticket range (₹10 Lakh - ₹50 Lakh)',
+            'Same state match (Punjab)',
+            'Overlaps business model (B2B)'
+          ],
+          disclaimer: 'The score measures profile compatibility, not the probability of funding.'
+        },
+        {
+          investor_id: 'i0000000-0000-0000-0000-000000000003',
+          firm_name: 'Launchpad Angels',
+          location: 'Bengaluru, Karnataka, India',
+          sectors: ['AgriTech', 'HealthTech', 'AI / ML'],
+          stages: ['idea', 'validation', 'mvp'],
+          ticket_min: 500000,
+          ticket_max: 3000000,
+          score: 84,
+          breakdown: { industry: 50, stage: 100, funding: 100, location: 60, business_model: 100 },
+          reasons: [
+            'Matches 1 of 2 sectors (AgriTech)',
+            'Exact stage match for MVP',
+            'Funding ask ₹15L within ticket range (₹5L - ₹30L)',
+            'Country match (India)'
+          ],
+          disclaimer: 'The score measures profile compatibility, not the probability of funding.'
+        },
+        {
+          investor_id: 'i0000000-0000-0000-0000-000000000002',
+          firm_name: 'Blue Horizon Capital',
+          location: 'Mumbai, Maharashtra, India',
+          sectors: ['FinTech', 'B2B SaaS'],
+          stages: ['mvp', 'growth'],
+          ticket_min: 2500000,
+          ticket_max: 10000000,
+          score: 55,
+          breakdown: { industry: 0, stage: 100, funding: 60, location: 60, business_model: 100 },
+          reasons: [
+            'No sector overlap (FinTech, B2B SaaS vs AgriTech)',
+            'Exact stage match for MVP',
+            'Funding ask ₹15L below min ticket ₹25L',
+            'Country match (India)'
+          ],
+          disclaimer: 'The score measures profile compatibility, not the probability of funding.'
+        }
+      ]);
+    } finally {
+      setFounderMatchesLoading(false);
+    }
+  }, [currentStartup?.id]);
+
+  const fetchInvestorMatches = useCallback(async () => {
+    try {
+      setInvestorMatchesLoading(true);
+      setInvestorMatchesError(null);
+      const res = await apiClient.get<any[]>('/matches/startups');
+      if (res && res.data) {
+        setInvestorMatches(res.data);
+      }
+    } catch (err: any) {
+      console.warn('Investor matches API notice:', err);
+      setInvestorMatchesError(err.message || 'Unable to load recommended startups');
+      setInvestorMatches([
+        {
+          startup_id: 's0000000-0000-0000-0000-000000000001',
+          name: 'FarmSense',
+          tagline: 'Practical intelligence for every farmer.',
+          sectors: ['AgriTech', 'Climate Tech'],
+          stage: 'mvp',
+          funding_ask: 1500000,
+          location: 'Ludhiana, Punjab, India',
+          business_model: 'B2B',
+          score: 97,
+          breakdown: { industry: 100, stage: 100, funding: 100, location: 80, business_model: 100 },
+          reasons: [
+            'Matches 2 of 2 sectors (AgriTech, Climate Tech)',
+            'Exact stage match for MVP',
+            'Funding ask of ₹15 Lakh is within ticket range (₹10 Lakh - ₹50 Lakh)',
+            'Same state match (Punjab)',
+            'Overlaps business model (B2B)'
+          ],
+          disclaimer: 'The score measures profile compatibility, not the probability of funding.'
+        },
+        {
+          startup_id: 's0000000-0000-0000-0000-000000000002',
+          name: 'TerraLoop',
+          tagline: 'Circular-economy crop residue packaging.',
+          sectors: ['Climate Tech', 'Clean Energy'],
+          stage: 'mvp',
+          funding_ask: 2500000,
+          location: 'Chandigarh, India',
+          business_model: 'B2B',
+          score: 82,
+          breakdown: { industry: 50, stage: 100, funding: 100, location: 80, business_model: 100 },
+          reasons: [
+            'Matches 1 of 2 sectors (Climate Tech)',
+            'Exact stage match for MVP',
+            'Funding ask ₹25 Lakh is within ticket range',
+            'Same state match (Punjab region)'
+          ],
+          disclaimer: 'The score measures profile compatibility, not the probability of funding.'
+        },
+        {
+          startup_id: 's0000000-0000-0000-0000-000000000003',
+          name: 'Medora AI',
+          tagline: 'Earlier signals. Better healthcare outcomes.',
+          sectors: ['HealthTech', 'AI / ML'],
+          stage: 'early_traction',
+          funding_ask: 4000000,
+          location: 'Delhi, India',
+          business_model: 'B2B',
+          score: 64,
+          breakdown: { industry: 0, stage: 50, funding: 100, location: 60, business_model: 100 },
+          reasons: [
+            'Adjacent stage match (Early Traction)',
+            'Funding ask ₹40 Lakh within ticket range',
+            'Country match (India)'
+          ],
+          disclaimer: 'The score measures profile compatibility, not the probability of funding.'
+        }
+      ]);
+    } finally {
+      setInvestorMatchesLoading(false);
+    }
+  }, []);
+
+  const fetchInvestorPrefs = useCallback(async () => {
+    try {
+      const res = await apiClient.get<any>('/investors/preferences');
+      if (res && res.data) {
+        setInvestorPrefs({
+          firm_name: res.data.firm_name || 'Northstar Ventures',
+          sectors: Array.isArray(res.data.sectors) ? res.data.sectors : ['AgriTech', 'Climate Tech'],
+          stages: Array.isArray(res.data.stages) ? res.data.stages : ['mvp', 'early_traction'],
+          ticket_min: typeof res.data.ticket_min === 'number' ? res.data.ticket_min : 1000000,
+          ticket_max: typeof res.data.ticket_max === 'number' ? res.data.ticket_max : 5000000,
+          regions: Array.isArray(res.data.regions) ? res.data.regions : ['Punjab', 'India'],
+          business_models: Array.isArray(res.data.business_models) ? res.data.business_models : ['B2B'],
+          thesis: res.data.thesis || '',
+        });
+      }
+    } catch (e) {
+      console.warn('Investor preferences fetch notice:', e);
+    }
+  }, []);
+
+  const handleSaveInvestorPrefs = async (jumpToRecommendations: boolean = false) => {
+    try {
+      setSavingPrefs(true);
+      if (investorPrefs.ticket_min > investorPrefs.ticket_max) {
+        notify('Minimum ticket cannot be greater than maximum ticket.');
+        return;
+      }
+      if (investorPrefs.sectors.length === 0) {
+        notify('Please select at least one sector.');
+        return;
+      }
+      if (investorPrefs.stages.length === 0) {
+        notify('Please select at least one stage.');
+        return;
+      }
+
+      await apiClient.put<any>('/investors/preferences', investorPrefs);
+      notify('Preferences saved! Match cache invalidated & rankings updated.');
+      await fetchInvestorMatches();
+      if (jumpToRecommendations) {
+        setPage('Recommended Startups');
+      }
+    } catch (err: any) {
+      notify(`Failed to save preferences: ${err.message || 'Error'}`);
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (page === 'Investor Matches' || (page === 'Dashboard' && role === 'Founder')) {
+      fetchFounderMatches();
+    }
+    if (page === 'Recommended Startups' || (page === 'Dashboard' && role === 'Investor')) {
+      fetchInvestorMatches();
+    }
+    if (page === 'Investment Preferences') {
+      fetchInvestorPrefs();
+    }
+  }, [page, role, fetchFounderMatches, fetchInvestorMatches, fetchInvestorPrefs]);
 
   // Iteration 5: Live API Discovery & Search States
   const [discoveryStartups, setDiscoveryStartups] = useState<any[]>([]);
@@ -886,13 +1157,13 @@ export default function Home(){
     ) : null;
 
     if(role==='Admin')return <>{verificationBanner}<SectionTitle eyebrow="Platform operations" title="Admin overview" desc="A snapshot of platform activity, pending approvals, and content that needs attention."/><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Total users" value="248" delta="+18 this month" icon={Users}/><Metric label="Startup listings" value={String(64+startups.length-6)} delta="+9 this month" icon={Lightbulb}/><Metric label="Pending verifications" value={String(verifications.length || 12)} delta="Needs review" icon={ShieldCheck}/><Metric label="Open reports" value="3" delta="Review queue" icon={Inbox}/></div><div className="mt-6 grid gap-5 xl:grid-cols-[1.3fr_.7fr]"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Needs your attention</h3><Pill tone="amber">{verifications.length || 15} items</Pill></div>{[{title:'Investor verification requests',count:`${verifications.filter(v=>v.role_requested==='investor').length || 8} pending`,page:'Verification Queue',icon:ShieldCheck},{title:'Mentor verification requests',count:`${verifications.filter(v=>v.role_requested==='mentor').length || 3} pending`,page:'Verification Queue',icon:HeartHandshake},{title:'Reported startup listings',count:'3 reports',page:'Reported Content',icon:Inbox},{title:'Incubator verification',count:`${verifications.filter(v=>v.role_requested==='incubator').length || 1} pending`,page:'Verification Queue',icon:Building2}].map(x=><button key={x.title} onClick={()=>navTo(x.page)} className="mt-3 flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left hover:bg-slate-50"><span className="rounded-xl bg-amber-50 p-2.5 text-amber-700"><x.icon size={18}/></span><span className="flex-1"><span className="block text-sm font-semibold">{x.title}</span><span className="mt-1 block text-xs text-slate-500">{x.count}</span></span><ChevronRight size={16} className="text-slate-400"/></button>)}</div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><h3 className="font-semibold">Users by role</h3>{[{name:'Founders',n:142,w:'80%'},{name:'Investors',n:48,w:'42%'},{name:'Mentors',n:31,w:'30%'},{name:'Incubators',n:27,w:'25%'}].map(x=><div key={x.name} className="mt-5"><div className="flex justify-between text-sm"><span className="text-slate-600">{x.name}</span><b>{x.n}</b></div><div className="mt-2 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-forest" style={{width:x.w}}/></div></div>)}</div></div><div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Recent activity</h3><button onClick={()=>navTo('Users')} className="text-sm font-semibold text-forest">View users</button></div><ActivityRows items={[['New startup submitted','FarmSense · 18 min ago','green'],['Investor verification requested','Northstar Ventures · 1 hr ago','blue'],['Incubator application received','Campus Founders Fellowship · 3 hrs ago','amber']]}/></div></>;
-    return <>{verificationBanner}<div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p className="text-sm text-slate-500">Monday, 26 October 2026</p><h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-[28px]">{greeting}</h1><p className="mt-2 text-sm text-slate-500">Here’s what’s happening across your workspace.</p></div>{role==='Founder'?<Button onClick={()=>openModal('newStartup','Create startup profile')}><Plus size={16}/> Add startup</Button>:role==='Incubator'?<Button onClick={()=>openModal('newProgram','Create a program')}><Plus size={16}/> New program</Button>:null}</div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{(role==='Founder'?[['My startups','1','Profile in progress',Lightbulb],['Investor matches','12','3 new this week',Sparkles],['Pitch requests','4','2 need a response',Send],['Program applications','2','1 under review',Building2]]:role==='Investor'?[['New matches','18','5 added this week',Sparkles],['Watchlist',String(saved.length),'Saved opportunities',Bookmark],['Active conversations','4','2 awaiting reply',MessageCircle],['Meetings this month','3','1 upcoming',CalendarDays]]:role==='Mentor'?[['Open requests','4','2 new requests',HeartHandshake],['Startups reviewed','12','This quarter',Eye],['Active conversations','3','Across 2 sectors',MessageCircle],['Upcoming sessions','2','Next 7 days',CalendarDays]]:[['Active programs','3','1 closing soon',Building2],['Applications','24','6 need review',ClipboardList],['Shortlisted','8','Across all programs',CheckCircle2],['Startups supported','17','Across your programs',Lightbulb]]).map(([label,value,delta,Icon]:any)=><Metric key={label} label={label} value={value} delta={delta} icon={Icon}/>)}</div><div className="mt-6 grid gap-5 xl:grid-cols-[1.35fr_.65fr]"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><div><h3 className="font-semibold">{role==='Investor'?'Recommended for your thesis':role==='Mentor'?'Mentorship requests':role==='Incubator'?'Applications to review':'Recommended opportunities'}</h3><p className="mt-1 text-xs text-slate-500">{role==='Investor'?'Based on your investment preferences':'A few places to start today'}</p></div><button onClick={()=>navTo(role==='Investor'?'Recommended Startups':role==='Mentor'?'Mentorship Requests':role==='Incubator'?'Applications Received':'Investor Matches')} className="text-xs font-semibold text-forest">View all <ArrowRight size={13} className="inline"/></button></div>{role==='Mentor'?<RequestRow name="Riya Kapoor" subtitle="Medora AI · Go-to-market guidance" initials="RK" status="New request" onClick={()=>openModal('request','Mentorship request')}/>:role==='Incubator'?<RequestRow name="FarmSense" subtitle="Campus Founders Fellowship" initials="FS" status="Under review" onClick={()=>navTo('Applications Received')}/>:<div className="mt-4 space-y-3">{(role==='Investor'?startups.slice(0,3):startups.slice(0,3)).map(s=><button key={s.id} onClick={()=>openModal('startup',s.name,s)} className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:bg-slate-50"><Avatar initials={s.initials} color={s.color}/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{s.name}</p><p className="mt-1 truncate text-xs text-slate-500">{s.sector} · {s.stage}</p></div><div className="text-right"><Pill tone="green">{s.match}% fit</Pill><p className="mt-1 text-[10px] text-slate-400">{s.ask} ask</p></div></button>)}</div>}</div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Your next steps</h3><Clock3 size={17} className="text-slate-400"/></div>{(role==='Founder'?[['Review investor access requests','2 requests waiting'],['Complete startup profile','Add team and traction'],['Apply to an incubator','3 programs fit your profile']]:role==='Investor'?[['Respond to a pitch request','2 founders are waiting'],['Review your watchlist','2 saved startups updated'],['Set investment preferences','Improve your matches']]:role==='Mentor'?[['Respond to new requests','2 founders waiting'],['Review a startup pitch','Medora AI shared a deck'],['Update availability','Keep your profile current']]:role==='Incubator'?[['Review new applications','6 applications pending'],['Check program deadline','Campus fellowship · 30 Nov'],['Publish a program update','Keep founders informed']]:[['Review verification queue','12 profiles awaiting approval'],['Resolve reported content','3 items need review'],['Check platform health','All core services operational']]).map(([a,b])=><button key={a} onClick={()=>notify(`${a}: demo action opened`)} className="mt-4 flex w-full items-start gap-3 text-left"><span className="mt-0.5 rounded-lg border border-slate-200 p-1.5 text-slate-500"><CircleDashed size={15}/></span><span><span className="block text-sm font-medium">{a}</span><span className="mt-1 block text-xs text-slate-500">{b}</span></span></button>)}</div></div><div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Recent activity</h3><button onClick={()=>navTo('Messages')} className="text-sm font-semibold text-forest">Open messages</button></div><ActivityRows items={[[role==='Investor'?'A founder shared an update':'New connection activity','FarmSense · Today','green'],['Pitch request updated','Northstar Ventures · Yesterday','blue'],['New opportunity available','Punjab Innovation Launchpad · 2 days ago','amber']]}/></div></>;
+    return <>{verificationBanner}<div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p className="text-sm text-slate-500">Monday, 26 October 2026</p><h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-[28px]">{greeting}</h1><p className="mt-2 text-sm text-slate-500">Here’s what’s happening across your workspace.</p></div>{role==='Founder'?<Button onClick={()=>openModal('newStartup','Create startup profile')}><Plus size={16}/> Add startup</Button>:role==='Incubator'?<Button onClick={()=>openModal('newProgram','Create a program')}><Plus size={16}/> New program</Button>:null}</div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{(role==='Founder'?[['My startups','1','Profile in progress',Lightbulb],['Investor matches','12','3 new this week',Sparkles],['Pitch requests','4','2 need a response',Send],['Program applications','2','1 under review',Building2]]:role==='Investor'?[['New matches','18','5 added this week',Sparkles],['Watchlist',String(saved.length),'Saved opportunities',Bookmark],['Active conversations','4','2 awaiting reply',MessageCircle],['Meetings this month','3','1 upcoming',CalendarDays]]:role==='Mentor'?[['Open requests','4','2 new requests',HeartHandshake],['Startups reviewed','12','This quarter',Eye],['Active conversations','3','Across 2 sectors',MessageCircle],['Upcoming sessions','2','Next 7 days',CalendarDays]]:[['Active programs','3','1 closing soon',Building2],['Applications','24','6 need review',ClipboardList],['Shortlisted','8','Across all programs',CheckCircle2],['Startups supported','17','Across your programs',Lightbulb]]).map(([label,value,delta,Icon]:any)=><Metric key={label} label={label} value={value} delta={delta} icon={Icon}/>)}</div><div className="mt-6 grid gap-5 xl:grid-cols-[1.35fr_.65fr]"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><div><h3 className="font-semibold">{role==='Founder'?'Top investor matches':role==='Investor'?'Recommended for your thesis':role==='Mentor'?'Mentorship requests':role==='Incubator'?'Applications to review':'Recommended opportunities'}</h3><p className="mt-1 text-xs text-slate-500">{role==='Founder'?'Ranked by sector, stage, ticket, and location':role==='Investor'?'Live matching against your active preferences':'A few places to start today'}</p></div><button onClick={()=>navTo(role==='Founder'?'Investor Matches':role==='Investor'?'Recommended Startups':role==='Mentor'?'Mentorship Requests':role==='Incubator'?'Applications Received':'Investor Matches')} className="text-xs font-semibold text-forest">View all <ArrowRight size={13} className="inline"/></button></div>{role==='Mentor'?<RequestRow name="Riya Kapoor" subtitle="Medora AI · Go-to-market guidance" initials="RK" status="New request" onClick={()=>openModal('request','Mentorship request')}/>:role==='Incubator'?<RequestRow name="FarmSense" subtitle="Campus Founders Fellowship" initials="FS" status="Under review" onClick={()=>navTo('Applications Received')}/>:role==='Founder'?<div className="mt-4 space-y-3">{founderMatches.slice(0,3).map((inv: any)=><button key={inv.investor_id || inv.firm_name} onClick={()=>navTo('Investor Matches')} className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:bg-slate-50"><Avatar initials={(inv.firm_name || 'NV').split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()} size="sm"/><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="truncate text-sm font-semibold text-ink">{inv.firm_name}</p><Pill tone="green">Verified</Pill></div><p className="mt-0.5 truncate text-xs text-slate-500">{inv.reasons?.[0] || inv.location}</p></div><div className="text-right shrink-0"><Pill tone={inv.score >= 80 ? 'green' : inv.score >= 60 ? 'blue' : 'amber'}>{inv.score}% fit</Pill><p className="mt-1 text-[10px] text-slate-400">{inv.stages?.join(', ') || 'MVP'}</p></div></button>)}</div>:<div className="mt-4 space-y-3">{investorMatches.slice(0,3).map((st: any)=><button key={st.startup_id || st.name} onClick={()=>navTo('Recommended Startups')} className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:bg-slate-50"><Avatar initials={(st.name || 'FS').split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()} size="sm"/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{st.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{st.reasons?.[0] || st.tagline}</p></div><div className="text-right shrink-0"><Pill tone={st.score >= 80 ? 'green' : st.score >= 60 ? 'blue' : 'amber'}>{st.score}% fit</Pill><p className="mt-1 text-[10px] text-slate-400">{typeof st.funding_ask === 'number' ? `₹${(st.funding_ask/100000).toFixed(0)}L ask` : '₹15L ask'}</p></div></button>)}</div>}</div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Your next steps</h3><Clock3 size={17} className="text-slate-400"/></div>{(role==='Founder'?[['Review investor access requests','2 requests waiting'],['Complete startup profile','Add team and traction'],['Apply to an incubator','3 programs fit your profile']]:role==='Investor'?[['Respond to a pitch request','2 founders are waiting'],['Review your watchlist','2 saved startups updated'],['Set investment preferences','Improve your matches']]:role==='Mentor'?[['Respond to new requests','2 founders waiting'],['Review a startup pitch','Medora AI shared a deck'],['Update availability','Keep your profile current']]:role==='Incubator'?[['Review new applications','6 applications pending'],['Check program deadline','Campus fellowship · 30 Nov'],['Publish a program update','Keep founders informed']]:[['Review verification queue','12 profiles awaiting approval'],['Resolve reported content','3 items need review'],['Check platform health','All core services operational']]).map(([a,b])=><button key={a} onClick={()=>notify(`${a}: demo action opened`)} className="mt-4 flex w-full items-start gap-3 text-left"><span className="mt-0.5 rounded-lg border border-slate-200 p-1.5 text-slate-500"><CircleDashed size={15}/></span><span><span className="block text-sm font-medium">{a}</span><span className="mt-1 block text-xs text-slate-500">{b}</span></span></button>)}</div></div><div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Recent activity</h3><button onClick={()=>navTo('Messages')} className="text-sm font-semibold text-forest">Open messages</button></div><ActivityRows items={[[role==='Investor'?'A founder shared an update':'New connection activity','FarmSense · Today','green'],['Pitch request updated','Northstar Ventures · Yesterday','blue'],['New opportunity available','Punjab Innovation Launchpad · 2 days ago','amber']]}/></div></>;
   }
-  if(page==='Discover Startups'||page==='Recommended Startups'||page==='Startup Listings') return (
+  if(page==='Discover Startups'||page==='Startup Listings') return (
     <>
       <SectionTitle
         eyebrow="Startup discovery"
-        title={page==='Recommended Startups'?'Recommended for your thesis':page==='Startup Listings'?'Startup listings':'Discover startups'}
+        title={page==='Startup Listings'?'Startup listings':'Discover startups'}
         desc="Find early-stage companies by sector, maturity, geography, and funding requirements with full-text search and verified filters."
       />
       <DiscoveryControls
@@ -989,7 +1260,291 @@ export default function Home(){
       )}
     </>
   );
-  if(page==='Investor Matches'||page==='Discover Investors')return <><SectionTitle eyebrow="Smart matching" title={page==='Investor Matches'?'Your investor matches':'Discover investors'} desc="Ranked by sector, stage, funding range, location, and business model alignment."/><div className="mb-5 grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><label className="text-sm font-semibold">Startup to match</label><select className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" defaultValue="FarmSense"><option>FarmSense</option><option>TerraLoop</option><option>Medora AI</option></select></div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><label className="text-sm font-semibold">Matching weights</label><div className="mt-3 flex flex-wrap gap-2"><Pill tone="green">Sector 30%</Pill><Pill tone="blue">Stage 25%</Pill><Pill tone="purple">Funding 20%</Pill><Pill>Location 15%</Pill><Pill tone="amber">Model 10%</Pill></div></div></div><div className="space-y-4">{investors.map((inv,i)=><div key={inv.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><Avatar initials={inv.initials} color={inv.color} size="lg"/><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{inv.name}</h3><Pill tone="green">Verified</Pill></div><p className="mt-1 text-sm text-slate-500">{inv.sector}</p><div className="mt-3 flex flex-wrap gap-2"><Pill>{inv.stage}</Pill><Pill>{inv.ticket}</Pill><Pill>{inv.location}</Pill></div><details className="mt-4 rounded-xl bg-slate-50 p-3"><summary className="cursor-pointer text-xs font-semibold text-forest">Why this match?</summary><p className="mt-2 text-sm leading-6 text-slate-600">Strong sector alignment, compatible startup stage, and a funding range that overlaps the current ask. Location and business-model preferences also contribute to this compatibility score.</p></details></div><div className="flex items-center gap-4 sm:flex-col sm:items-end"><div className="text-center"><p className="text-2xl font-semibold text-forest">{inv.match}%</p><p className="text-[10px] uppercase tracking-wide text-slate-400">Compatibility</p></div><Button onClick={()=>{setRequests(old=>old.includes(inv.name)?old:[...old,inv.name]);notify(`Connection request sent to ${inv.name}.`)}} disabled={requests.includes(inv.name)}>{requests.includes(inv.name)?<><Check size={14}/> Requested</>:'Connect'}</Button></div></div></div>)}</div></>;
+  
+  if(page==='Recommended Startups') return (
+    <>
+      <SectionTitle
+        eyebrow="Smart matching · Investor flow"
+        title="Recommended startups for your thesis"
+        desc="Ranked in real time based on your active investment criteria: sector alignment (30%), stage (25%), funding ask (20%), location (15%), and business model (10%)."
+        action={
+          <Button onClick={()=>navTo('Investment Preferences')}>
+            <SlidersHorizontal size={15}/> Tune investment preferences
+          </Button>
+        }
+      />
+
+      <div className="mb-6 space-y-4">
+        <MatchDisclaimer />
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-soft">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Weights:</span>
+            <Pill tone="green">Industry 30%</Pill>
+            <Pill tone="blue">Stage 25%</Pill>
+            <Pill tone="purple">Funding 20%</Pill>
+            <Pill tone="gray">Location 15%</Pill>
+            <Pill tone="amber">Model 10%</Pill>
+          </div>
+          <div className="text-xs text-slate-500">
+            Current thesis: <b className="text-ink">{investorPrefs.firm_name}</b> ({investorPrefs.sectors.join(', ')})
+          </div>
+        </div>
+      </div>
+
+      {investorMatchesLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[...Array(6)].map((_, i) => <StartupSkeleton key={i} />)}
+        </div>
+      ) : investorMatches.length > 0 ? (
+        <div className="space-y-4">
+          {investorMatches.map((st: any) => {
+            const isExpanded = !!expandedBreakdown[st.startup_id || st.name];
+            const bd = st.breakdown || { industry: 100, stage: 100, funding: 100, location: 80, business_model: 100 };
+            const askDisplay = typeof st.funding_ask === 'number'
+              ? (st.funding_ask >= 10000000 ? `₹${(st.funding_ask/10000000).toFixed(1)} Cr` : `₹${(st.funding_ask/100000).toFixed(0)} Lakh`)
+              : (st.ask || '₹15L');
+
+            return (
+              <article key={st.startup_id || st.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft transition hover:border-emerald-200">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-start gap-4">
+                      <Avatar initials={(st.name || 'FS').split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()} size="lg" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-ink">{st.name}</h3>
+                          <Pill tone="green">{st.stage?.toUpperCase() || 'MVP'}</Pill>
+                          <Pill>{st.location}</Pill>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-600">{st.tagline}</p>
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {(st.sectors || [st.sector || 'General']).map((s: string) => (
+                            <span key={s} className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl bg-slate-50 p-3.5">
+                      <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Plain Language Match Reasons:</p>
+                      <div className="mt-2 space-y-1.5">
+                        {(st.reasons && st.reasons.length > 0 ? st.reasons : [
+                          `Matches sectors (${(st.sectors || ['AgriTech']).join(', ')})`,
+                          `Stage match for ${st.stage || 'MVP'}`,
+                          `Funding ask ${askDisplay} aligns with ticket range`
+                        ]).map((reason: string, rIdx: number) => (
+                          <div key={rIdx} className="flex items-start gap-2 text-xs text-slate-700">
+                            <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-600" />
+                            <span>{reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-forest">Score Breakdown (Weighted 0-100)</h4>
+                          <span className="text-xs font-semibold text-forest">Weighted Score: {st.score}%</span>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                          <ScoreCriterionBar label="Industry Fit" weight={30} score={bd.industry ?? 100} />
+                          <ScoreCriterionBar label="Stage Match" weight={25} score={bd.stage ?? 100} />
+                          <ScoreCriterionBar label="Funding Ask" weight={20} score={bd.funding ?? 100} />
+                          <ScoreCriterionBar label="Location" weight={15} score={bd.location ?? 80} />
+                          <ScoreCriterionBar label="Business Model" weight={10} score={bd.business_model ?? 100} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-row items-center justify-between gap-4 border-t border-slate-100 pt-4 lg:flex-col lg:items-end lg:border-t-0 lg:pt-0">
+                    <div className="text-left lg:text-right">
+                      <div className="flex items-baseline gap-1 lg:justify-end">
+                        <span className="text-3xl font-bold tracking-tight text-forest">{st.score}%</span>
+                      </div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Match score</p>
+                      <p className="mt-1 text-xs font-semibold text-ink">Ask: {askDisplay}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 lg:flex-col lg:w-44">
+                      <Button
+                        kind="secondary"
+                        onClick={() => toggleBreakdown(st.startup_id || st.name)}
+                        className="!text-xs !py-1.5 w-full"
+                      >
+                        {isExpanded ? 'Hide breakdown' : 'View breakdown'}
+                      </Button>
+                      <Button
+                        onClick={() => handleOpenStartupDetail(st)}
+                        className="!text-xs !py-1.5 w-full"
+                      >
+                        View profile <ArrowRight size={13}/>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          title="No recommended startups"
+          desc="Try broadening your investment preferences (ticket size, sectors, or stages) to discover matching companies."
+          action={<Button onClick={()=>navTo('Investment Preferences')}>Adjust Preferences</Button>}
+        />
+      )}
+    </>
+  );
+
+  if(page==='Investor Matches'||page==='Discover Investors') return (
+    <>
+      <SectionTitle
+        eyebrow="Smart matching · Founder flow"
+        title={page==='Investor Matches'?'Your investor matches':'Discover investors'}
+        desc="Verified investors ranked by weighted profile compatibility: industry sectors (30%), stage (25%), funding ask (20%), location (15%), and business model (10%)."
+      />
+
+      <div className="mb-6 space-y-4">
+        <MatchDisclaimer />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
+            <label className="text-sm font-semibold">Startup to match</label>
+            <div className="mt-3 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
+              <div>
+                <span className="font-semibold text-ink">{currentStartup?.name || 'FarmSense'}</span>
+                <span className="ml-2 text-xs text-slate-500">({currentStartup?.stage?.toUpperCase() || 'MVP'} · ₹15L ask)</span>
+              </div>
+              <Pill tone="green">Active</Pill>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
+            <label className="text-sm font-semibold">Engine Weights</label>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Pill tone="green">Sector 30%</Pill>
+              <Pill tone="blue">Stage 25%</Pill>
+              <Pill tone="purple">Funding 20%</Pill>
+              <Pill tone="gray">Location 15%</Pill>
+              <Pill tone="amber">Model 10%</Pill>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {founderMatchesLoading ? (
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-44 rounded-2xl border border-slate-100 bg-white p-5 shadow-soft animate-pulse" />
+          ))}
+        </div>
+      ) : founderMatches.length > 0 ? (
+        <div className="space-y-4">
+          {founderMatches.map((inv: any) => {
+            const isExpanded = !!expandedBreakdown[inv.investor_id || inv.firm_name];
+            const bd = inv.breakdown || { industry: 100, stage: 100, funding: 100, location: 80, business_model: 100 };
+            const ticketDisplay = (inv.ticket_min && inv.ticket_max)
+              ? `₹${(inv.ticket_min/100000).toFixed(0)}L – ₹${(inv.ticket_max/100000).toFixed(0)}L`
+              : (inv.ticket || '₹10L–₹50L');
+
+            return (
+              <article key={inv.investor_id || inv.firm_name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft transition hover:border-emerald-200">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-start gap-4">
+                      <Avatar initials={(inv.firm_name || 'NV').split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()} size="lg" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-ink">{inv.firm_name}</h3>
+                          <Pill tone="green">Verified Investor</Pill>
+                          <Pill>{inv.location || 'India'}</Pill>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Focus: {(inv.sectors || ['AgriTech', 'Climate Tech']).join(' · ')}
+                        </p>
+                        <div className="mt-2.5 flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-700">Ticket: <b>{ticketDisplay}</b></span>
+                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-700">Stages: <b>{(inv.stages || ['mvp']).join(', ')}</b></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl bg-slate-50 p-3.5">
+                      <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Match Rationale:</p>
+                      <div className="mt-2 space-y-1.5">
+                        {(inv.reasons && inv.reasons.length > 0 ? inv.reasons : [
+                          'Sector overlap aligned with startup profile',
+                          'Startup stage matches investment mandate',
+                          'Funding ask is within investor ticket range'
+                        ]).map((reason: string, rIdx: number) => (
+                          <div key={rIdx} className="flex items-start gap-2 text-xs text-slate-700">
+                            <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-600" />
+                            <span>{reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-forest">5-Criteria Score Breakdown</h4>
+                          <span className="text-xs font-semibold text-forest">Overall: {inv.score}%</span>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                          <ScoreCriterionBar label="Industry Fit" weight={30} score={bd.industry ?? 100} />
+                          <ScoreCriterionBar label="Stage Fit" weight={25} score={bd.stage ?? 100} />
+                          <ScoreCriterionBar label="Funding Ask" weight={20} score={bd.funding ?? 100} />
+                          <ScoreCriterionBar label="Location" weight={15} score={bd.location ?? 80} />
+                          <ScoreCriterionBar label="Business Model" weight={10} score={bd.business_model ?? 100} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-row items-center justify-between gap-4 border-t border-slate-100 pt-4 lg:flex-col lg:items-end lg:border-t-0 lg:pt-0">
+                    <div className="text-left lg:text-right">
+                      <div className="flex items-baseline gap-1 lg:justify-end">
+                        <span className="text-3xl font-bold tracking-tight text-forest">{inv.score}%</span>
+                      </div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Compatibility</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 lg:flex-col lg:w-40">
+                      <Button
+                        kind="secondary"
+                        onClick={() => toggleBreakdown(inv.investor_id || inv.firm_name)}
+                        className="!text-xs !py-1.5 w-full"
+                      >
+                        {isExpanded ? 'Hide breakdown' : 'Show breakdown'}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setRequests(old => old.includes(inv.firm_name) ? old : [...old, inv.firm_name]);
+                          notify(`Connection request sent to ${inv.firm_name}.`);
+                        }}
+                        disabled={requests.includes(inv.firm_name)}
+                        className="!text-xs !py-1.5 w-full"
+                      >
+                        {requests.includes(inv.firm_name) ? <><Check size={14}/> Requested</> : 'Connect'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          title="No verified investor matches"
+          desc="Only verified investors appear in smart matching. As new investors are approved by admin, they will appear here automatically."
+        />
+      )}
+    </>
+  );
     if(page==='My Startup')return <><SectionTitle eyebrow="Founder workspace" title="My startup" desc="Manage your startup profile, team members, pitch deck, and track profile completeness." action={<Button onClick={()=>openModal('newStartup','Create startup profile')}><Plus size={15}/> Add startup</Button>}/>
   <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
     <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
@@ -1150,7 +1705,270 @@ export default function Home(){
   if(page==='Users')return <><SectionTitle eyebrow="Administration" title="Users" desc="Review user access and suspend accounts when required."/><div className="rounded-2xl border border-slate-100 bg-white shadow-soft"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400" size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search users..." className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"/></div><Button kind="secondary" onClick={()=>notify('User export prepared in demo.')}>Export users</Button></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-5 py-4">User</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Joined</th><th className="px-5 py-4">Action</th></tr></thead><tbody>{[['Manmeet Singh','Founder','Active','Oct 18'],['Northstar Ventures','Investor','Pending','Oct 25'],['Dr. Kavita Mehra','Mentor','Pending','Oct 24'],['Punjab Innovation Hub','Incubator','Active','Oct 12'],['Riya Kapoor','Founder','Active','Oct 11']].filter(r=>r.join(' ').toLowerCase().includes(search.toLowerCase())).map(r=><tr key={r[0]} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">{r[0]}</td><td className="px-5 py-4"><Pill>{r[1]}</Pill></td><td className="px-5 py-4"><Pill tone={r[2]==='Active'?'green':'amber'}>{r[2]}</Pill></td><td className="px-5 py-4 text-slate-500">{r[3]}</td><td className="px-5 py-4"><Button kind="secondary" onClick={()=>notify(`${r[0]} account status updated in demo.`)}>Manage</Button></td></tr>)}</tbody></table></div></div></>;
   if(page==='Reported Content')return <><SectionTitle eyebrow="Trust & safety" title="Reported content" desc="Review reports and keep startup discovery useful and trustworthy."/><div className="space-y-4">{[['Potentially misleading funding claim','Startup profile · Reported by a user','High'],['Duplicate startup listing','Startup listing · Reported by a founder','Medium'],['Unwanted message','Message thread · Reported by a recipient','Medium']].map((x,i)=><div key={x[0]} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><span className="rounded-xl bg-rose-50 p-3 text-rose-700"><Inbox size={20}/></span><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{x[0]}</h3><Pill tone={x[2]==='High'?'red':'amber'}>{x[2]} priority</Pill></div><p className="mt-1 text-sm text-slate-500">{x[1]}</p></div><div className="flex gap-2"><Button onClick={()=>notify('Report marked resolved in demo.')}>Resolve</Button><Button kind="secondary" onClick={()=>notify('Listing removed in demo.')}>Remove listing</Button></div></div></div>)}</div></>;
   if(page==='Messages')return <><SectionTitle eyebrow="Communication" title="Messages" desc="Simple conversations between connected users. Real-time chat is future scope."/><div className="grid min-h-[520px] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-soft md:grid-cols-[280px_1fr]"><div className="border-b border-slate-100 p-3 md:border-b-0 md:border-r"><div className="relative"><Search size={15} className="absolute left-3 top-3 text-slate-400"/><input placeholder="Search conversations" className="w-full rounded-xl bg-slate-50 py-2.5 pl-9 pr-3 text-xs outline-none"/></div>{[{name:'Northstar Ventures',sub:'Pilot results would be great',initials:'NV'},{name:'Riya Kapoor',sub:'Thanks for the introduction!',initials:'RK'},{name:'Punjab Innovation Hub',sub:'Application received',initials:'PI'}].map((x,i)=><button key={x.name} onClick={()=>{}} className={cn('mt-2 flex w-full items-center gap-3 rounded-xl p-3 text-left',i===0?'bg-emerald-50':'hover:bg-slate-50')}><Avatar initials={x.initials} size="sm"/><div className="min-w-0"><p className="truncate text-xs font-semibold">{x.name}</p><p className="mt-1 truncate text-[11px] text-slate-500">{x.sub}</p></div></button>)}</div><div className="flex min-h-[400px] flex-col"><div className="flex items-center gap-3 border-b border-slate-100 p-4"><Avatar initials="NV"/><div><p className="text-sm font-semibold">Northstar Ventures</p><p className="mt-1 text-xs text-emerald-700">Connected · Verified</p></div></div><div className="flex-1 space-y-4 bg-slate-50/60 p-5"><div className="max-w-[80%] rounded-2xl rounded-tl-sm border border-slate-100 bg-white p-3 text-sm leading-6">Hi! We would love to learn more about your pilot results.<p className="mt-2 text-[10px] text-slate-400">10:42 AM</p></div>{messages.slice(1).map((m,i)=><div key={i} className="ml-auto max-w-[80%] rounded-2xl rounded-tr-sm bg-forest p-3 text-sm leading-6 text-white">{m.text}<p className="mt-2 text-[10px] text-white/60">{m.time}</p></div>)}</div><form onSubmit={e=>{e.preventDefault();if(messageDraft.trim()){setMessages(old=>[...old,{from:'You',text:messageDraft,time:'Now'}]);setMessageDraft('')}}} className="flex gap-2 border-t border-slate-100 p-3"><input value={messageDraft} onChange={e=>setMessageDraft(e.target.value)} placeholder="Write a message..." className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/><Button><Send size={15}/> Send</Button></form></div></div></>;
-  if(page==='Profile & Settings'||page==='Investment Preferences'||page==='My Expertise Profile') {
+  
+  if(page==='Investment Preferences') {
+    const availableSectors = ['AgriTech', 'Climate Tech', 'FinTech', 'HealthTech', 'AI / ML', 'EdTech', 'B2B SaaS', 'Clean Energy', 'DeepTech', 'Consumer Tech', 'E-Commerce', 'Logistics'];
+    const availableStages = [
+      { id: 'idea', label: 'Idea' },
+      { id: 'validation', label: 'Validation' },
+      { id: 'mvp', label: 'MVP' },
+      { id: 'early_traction', label: 'Early Traction' },
+      { id: 'growth', label: 'Growth' },
+    ];
+    const availableRegions = ['Punjab', 'Delhi NCR', 'Karnataka', 'Maharashtra', 'Telangana', 'India', 'Open to any region'];
+    const availableModels = ['B2B', 'B2C', 'D2C', 'B2B2C', 'Marketplace', 'Subscription', 'SaaS'];
+
+    return (
+      <>
+        <SectionTitle
+          eyebrow="Investor workspace"
+          title="Investment Preferences & Thesis"
+          desc="Define your mandate. The pure matching engine uses these settings to calculate transparent compatibility scores (Industry 30%, Stage 25%, Funding 20%, Location 15%, Business Model 10%)."
+          action={
+            <div className="flex gap-2">
+              <Button disabled={savingPrefs} onClick={() => handleSaveInvestorPrefs(false)}>
+                {savingPrefs ? 'Saving...' : 'Save preferences'}
+              </Button>
+              <Button disabled={savingPrefs} kind="secondary" onClick={() => handleSaveInvestorPrefs(true)}>
+                Save & View Rankings <ArrowRight size={14}/>
+              </Button>
+            </div>
+          }
+        />
+
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
+            <h3 className="font-semibold text-ink">Firm & Fund Profile</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase">Firm / Angel Name</label>
+                <input
+                  value={investorPrefs.firm_name}
+                  onChange={e => setInvestorPrefs(prev => ({ ...prev, firm_name: e.target.value }))}
+                  placeholder="e.g. Northstar Ventures"
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase">Investment Thesis Summary</label>
+                <input
+                  value={investorPrefs.thesis}
+                  onChange={e => setInvestorPrefs(prev => ({ ...prev, thesis: e.target.value }))}
+                  placeholder="e.g. Early-stage agritech and climate hardware with proven field pilots."
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-ink">Target Sectors (Weight: 30%)</h3>
+                <p className="mt-0.5 text-xs text-slate-500">Share of startup sectors you cover determines this criterion score (0-100).</p>
+              </div>
+              <span className="text-xs font-semibold text-forest">{investorPrefs.sectors.length} selected</span>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {availableSectors.map(sec => {
+                const isSelected = investorPrefs.sectors.includes(sec);
+                return (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => {
+                      setInvestorPrefs(prev => ({
+                        ...prev,
+                        sectors: isSelected
+                          ? prev.sectors.filter(s => s !== sec)
+                          : [...prev.sectors, sec]
+                      }));
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                      isSelected
+                        ? 'bg-forest text-white shadow-sm'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200'
+                    }`}
+                  >
+                    {isSelected && <Check size={14} />} {sec}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-ink">Preferred Stages (Weight: 25%)</h3>
+                <p className="mt-0.5 text-xs text-slate-500">Exact match = 100, adjacent stage = 50, otherwise = 0.</p>
+              </div>
+              <span className="text-xs font-semibold text-forest">{investorPrefs.stages.length} selected</span>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {availableStages.map(stg => {
+                const isSelected = investorPrefs.stages.includes(stg.id);
+                return (
+                  <button
+                    key={stg.id}
+                    type="button"
+                    onClick={() => {
+                      setInvestorPrefs(prev => ({
+                        ...prev,
+                        stages: isSelected
+                          ? prev.stages.filter(s => s !== stg.id)
+                          : [...prev.stages, stg.id]
+                      }));
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                      isSelected
+                        ? 'bg-forest text-white shadow-sm'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200'
+                    }`}
+                  >
+                    {isSelected && <Check size={14} />} {stg.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
+            <div>
+              <h3 className="font-semibold text-ink">Ticket Size Range (Weight: 20%)</h3>
+              <p className="mt-0.5 text-xs text-slate-500">100 if ask is in range; scaled smoothly if below min or above max.</p>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase">Min Ticket (INR)</label>
+                <input
+                  type="number"
+                  step="100000"
+                  value={investorPrefs.ticket_min}
+                  onChange={e => setInvestorPrefs(prev => ({ ...prev, ticket_min: Number(e.target.value) || 0 }))}
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-500"
+                />
+                <span className="mt-1 block text-xs text-slate-500">
+                  ≈ ₹{(investorPrefs.ticket_min / 100000).toFixed(1)} Lakh
+                </span>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase">Max Ticket (INR)</label>
+                <input
+                  type="number"
+                  step="100000"
+                  value={investorPrefs.ticket_max}
+                  onChange={e => setInvestorPrefs(prev => ({ ...prev, ticket_max: Number(e.target.value) || 0 }))}
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-500"
+                />
+                <span className="mt-1 block text-xs text-slate-500">
+                  ≈ ₹{(investorPrefs.ticket_max / 100000).toFixed(1)} Lakh
+                </span>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                { label: 'Seed Angel (₹10L – ₹50L)', min: 1000000, max: 5000000 },
+                { label: 'Micro Angel (₹5L – ₹25L)', min: 500000, max: 2500000 },
+                { label: 'Pre-Series A (₹50L – ₹2Cr)', min: 5000000, max: 20000000 },
+                { label: 'FinTech Syndicate (₹25L – ₹1Cr)', min: 2500000, max: 10000000 },
+              ].map(preset => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setInvestorPrefs(prev => ({ ...prev, ticket_min: preset.min, ticket_max: preset.max }))}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
+              <h3 className="font-semibold text-ink">Target Geography (Weight: 15%)</h3>
+              <p className="mt-0.5 text-xs text-slate-500">Same city: 100, same state: 80, country: 60, open: 60.</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {availableRegions.map(reg => {
+                  const isSelected = investorPrefs.regions.includes(reg);
+                  return (
+                    <button
+                      key={reg}
+                      type="button"
+                      onClick={() => {
+                        setInvestorPrefs(prev => ({
+                          ...prev,
+                          regions: isSelected
+                            ? prev.regions.filter(r => r !== reg)
+                            : [...prev.regions, reg]
+                        }));
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                        isSelected
+                          ? 'bg-forest text-white'
+                          : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200'
+                      }`}
+                    >
+                      {isSelected && <Check size={14} />} {reg}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
+              <h3 className="font-semibold text-ink">Business Models (Weight: 10%)</h3>
+              <p className="mt-0.5 text-xs text-slate-500">Share of overlap; neutral 50 if no preference is chosen.</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {availableModels.map(model => {
+                  const isSelected = investorPrefs.business_models.includes(model);
+                  return (
+                    <button
+                      key={model}
+                      type="button"
+                      onClick={() => {
+                        setInvestorPrefs(prev => ({
+                          ...prev,
+                          business_models: isSelected
+                            ? prev.business_models.filter(m => m !== model)
+                            : [...prev.business_models, model]
+                        }));
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                        isSelected
+                          ? 'bg-forest text-white'
+                          : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-200'
+                      }`}
+                    >
+                      {isSelected && <Check size={14} />} {model}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-[#edf5ee] p-5">
+            <div>
+              <h4 className="font-semibold text-forest">Ready to update your live rankings?</h4>
+              <p className="mt-0.5 text-xs text-slate-600">Saving invalidates previous match scores in PostgreSQL cache and recalculates fit.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button disabled={savingPrefs} onClick={() => handleSaveInvestorPrefs(false)}>
+                {savingPrefs ? 'Saving...' : 'Save preferences'}
+              </Button>
+              <Button disabled={savingPrefs} kind="secondary" onClick={() => handleSaveInvestorPrefs(true)}>
+                Save & View Rankings <ArrowRight size={14}/>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if(page==='Profile & Settings'||page==='My Expertise Profile') {
     const displayName = profileFullName || auth.user?.full_name || (role==='Founder'?'Manmeet Singh':role==='Investor'?'Northstar Ventures':role==='Mentor'?'Dr. Kavita Mehra':'Punjab Innovation Hub');
     const displayEmail = auth.user?.email || 'hello@example.com';
     const displayInitials = displayName.split(' ').map((x: string)=>x[0]).join('').slice(0,2).toUpperCase();

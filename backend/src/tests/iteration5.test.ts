@@ -351,6 +351,9 @@ describe('Iteration 5: Discovery, Search, and Filters', () => {
         startup_id: 's-access-0002',
         requester_id: investorId,
         status: 'approved',
+        reviewed_by: 'f0000000-0000-0000-0000-000000000001',
+        reviewed_at: new Date().toISOString(),
+        notes: 'Access granted',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
