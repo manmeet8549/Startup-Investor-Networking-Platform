@@ -56,9 +56,12 @@ export interface InvestorProfile {
 
 export interface MentorProfile {
   user_id: string;
-  expertise_areas: string[];
-  years_of_experience: number;
-  mentoring_topics: string[];
+  expertise_areas?: string[];
+  years_of_experience?: number;
+  expertise?: string[];
+  experience?: number;
+  bio?: string;
+  mentoring_topics?: string[];
   linkedin_url: string | null;
   created_at: string;
   updated_at: string;

@@ -29,7 +29,7 @@ export function requireVerified(req: Request, _res: Response, next: NextFunction
     return next(new AppError('Authentication required', 401, 'UNAUTHORIZED'));
   }
 
-  if (req.user.verification_status !== 'verified') {
+  if (req.user.role !== 'admin' && req.user.verification_status !== 'verified') {
     return next(
       new AppError(
         'Your account is pending admin verification. Access is restricted until approved.',

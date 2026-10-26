@@ -5,8 +5,12 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+export const idParamSchema = z.object({
+  id: z.string().min(1, { message: 'ID is required' }),
+});
+
 export const uuidParamSchema = z.object({
-  id: z.string().uuid({ message: 'Invalid UUID format' }),
+  id: z.string().min(1, { message: 'ID is required' }),
 });
 
 export type PaginationQuery = z.infer<typeof paginationSchema>;

@@ -1536,15 +1536,219 @@ class InMemoryDatabase {
     return entry.investor_id === userId; // Private to owner
   }
 
+  // --- Reports ---
+  createReport(report: Report): Report {
+    const clone = {
+      ...report,
+      created_at: report.created_at || new Date().toISOString(),
+      updated_at: report.updated_at || new Date().toISOString(),
+    };
+    this.reports.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  getReportById(id: string): Report | null {
+    const r = this.reports.get(id);
+    return r ? { ...r } : null;
+  }
+
+  listReports(filter?: {
+    status?: string;
+    target_type?: string;
+    page?: number;
+    limit?: number;
+  }): { reports: any[]; total: number } {
+    let list = Array.from(this.reports.values());
+    if (filter?.status) {
+      list = list.filter((r) => r.status === filter.status);
+    }
+    if (filter?.target_type) {
+      list = list.filter((r) => r.target_type === filter.target_type);
+    }
+    list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const total = list.length;
+    const page = Math.max(1, filter?.page || 1);
+    const limit = Math.max(1, Math.min(100, filter?.limit || 20));
+    const start = (page - 1) * limit;
+    const paged = list.slice(start, start + limit).map((r) => {
+      const reporter = this.getProfileById(r.reporter_id);
+      let target_name: string | null = null;
+      if (r.target_type === 'startup') {
+        const s = this.getStartupById(r.target_id);
+        target_name = s ? s.name : null;
+      } else if (r.target_type === 'user') {
+        const u = this.getProfileById(r.target_id);
+        target_name = u ? u.full_name : null;
+      } else if (r.target_type === 'program') {
+        const p = this.getProgramById(r.target_id);
+        target_name = p ? p.name : null;
+      }
+      return {
+        ...r,
+        reporter_name: reporter ? reporter.full_name : 'Anonymous Reporter',
+        reporter_email: reporter ? reporter.email : null,
+        target_name,
+      };
+    });
+    return { reports: paged, total };
+  }
+
+  updateReport(id: string, updates: Partial<Report>): Report | null {
+    const existing = this.reports.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.reports.set(id, updated);
+    return { ...updated };
+  }
+
+  // --- Admin Startups & Moderation ---
+  hideStartup(id: string, isHidden: boolean = true): Startup | null {
+    const existing = this.startups.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      is_hidden: isHidden,
+      updated_at: new Date().toISOString(),
+    };
+    this.startups.set(id, updated);
+    this.invalidateMatchesForStartup(id);
+    return { ...updated };
+  }
+
+  listAdminStartups(options?: {
+    search?: string;
+    status?: 'all' | 'visible' | 'hidden';
+    sector?: string;
+    page?: number;
+    limit?: number;
+  }): { startups: any[]; total: number } {
+    let list = Array.from(this.startups.values());
+    if (options?.status === 'visible') {
+      list = list.filter((s) => !s.is_hidden);
+    } else if (options?.status === 'hidden') {
+      list = list.filter((s) => s.is_hidden === true);
+    }
+    if (options?.sector && options.sector !== 'All sectors') {
+      const sec = options.sector.toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.sector.toLowerCase() === sec ||
+          (s.sectors && s.sectors.some((x) => x.toLowerCase() === sec))
+      );
+    }
+    if (options?.search) {
+      const q = options.search.toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.tagline.toLowerCase().includes(q) ||
+          (s.description && s.description.toLowerCase().includes(q))
+      );
+    }
+    list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const total = list.length;
+    const page = Math.max(1, options?.page || 1);
+    const limit = Math.max(1, Math.min(100, options?.limit || 20));
+    const start = (page - 1) * limit;
+    const paged = list.slice(start, start + limit).map((s) => {
+      const founder = this.getProfileById(s.founder_id);
+      return {
+        ...s,
+        founder_name: founder ? founder.full_name : 'Unknown Founder',
+        founder_email: founder ? founder.email : null,
+      };
+    });
+    return { startups: paged, total };
+  }
+
   // --- Audit Logs ---
   createAuditLog(log: AuditLog): AuditLog {
-    const clone = { ...log, created_at: new Date().toISOString() };
+    const clone = { ...log, created_at: log.created_at || new Date().toISOString() };
     this.auditLogs.unshift(clone);
     return { ...clone };
   }
 
   listAuditLogs(): AuditLog[] {
     return [...this.auditLogs];
+  }
+
+  listAuditLogsFiltered(filter?: {
+    action?: string;
+    target_type?: string;
+    page?: number;
+    limit?: number;
+  }): { logs: any[]; total: number } {
+    let list = [...this.auditLogs];
+    if (filter?.action) {
+      const act = filter.action.toLowerCase();
+      list = list.filter((l) => l.action.toLowerCase().includes(act));
+    }
+    if (filter?.target_type) {
+      const tgt = filter.target_type.toLowerCase();
+      list = list.filter((l) => l.target_type.toLowerCase() === tgt);
+    }
+    const total = list.length;
+    const page = Math.max(1, filter?.page || 1);
+    const limit = Math.max(1, Math.min(100, filter?.limit || 20));
+    const start = (page - 1) * limit;
+    const paged = list.slice(start, start + limit).map((log) => {
+      const actorId = log.admin_id || log.actor_id;
+      const actor = actorId ? this.getProfileById(actorId) : null;
+      return {
+        ...log,
+        actor_name: actor ? actor.full_name : 'Admin',
+        actor_email: actor ? actor.email : null,
+      };
+    });
+    return { logs: paged, total };
+  }
+
+  // --- Platform Stats ---
+  getAdminStats(): {
+    users_by_role: { founder: number; investor: number; mentor: number; incubator: number; admin: number };
+    total_users: number;
+    startups_listed: number;
+    pending_verifications: number;
+    open_reports: number;
+    requests_last_30_days: number;
+  } {
+    const users_by_role = { founder: 0, investor: 0, mentor: 0, incubator: 0, admin: 0 };
+    for (const p of this.profiles.values()) {
+      if (p.role in users_by_role) {
+        users_by_role[p.role as keyof typeof users_by_role]++;
+      }
+    }
+    const startups_listed = Array.from(this.startups.values()).filter((s) => !s.is_hidden).length;
+    const pending_verifications = Array.from(this.verificationRequests.values()).filter(
+      (v) => v.status === 'pending'
+    ).length;
+    const open_reports = Array.from(this.reports.values()).filter((r) => r.status === 'pending').length;
+
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const isRecent = (dateStr: string) => {
+      const t = new Date(dateStr).getTime();
+      return !isNaN(t) && t >= thirtyDaysAgo;
+    };
+
+    let recentRequests = 0;
+    for (const r of this.pitchRequests.values()) if (isRecent(r.created_at)) recentRequests++;
+    for (const r of this.mentorshipRequests.values()) if (isRecent(r.created_at)) recentRequests++;
+    for (const r of this.connections.values()) if (isRecent(r.created_at)) recentRequests++;
+    for (const r of this.applications.values()) if (isRecent(r.created_at)) recentRequests++;
+    for (const r of this.documentAccessRequests.values()) if (isRecent(r.created_at)) recentRequests++;
+
+    return {
+      users_by_role,
+      total_users: this.profiles.size,
+      startups_listed,
+      pending_verifications,
+      open_reports,
+      requests_last_30_days: recentRequests,
+    };
   }
 }
 

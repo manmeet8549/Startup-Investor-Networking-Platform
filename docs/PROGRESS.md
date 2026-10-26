@@ -12,6 +12,7 @@
 | **Iteration 6** | **Investor Preferences, Transparent Smart Matching & Re-ranking** | **Completed** |
 | **Iteration 7** | **Investor Engagement, Pipeline Tracking, Pitch Meetings, Connections & Messaging** | **Completed** |
 | **Iteration 8** | **Mentorship, Incubation Programs, Cohort Applications & Real-time Notifications** | **Completed** |
+| **Iteration 9** | **Admin, Moderation, User Suspension, Startup Listings, Reports, Platform Stats & Audit Trail** | **Completed** |
 
 ---
 
@@ -393,6 +394,69 @@
      - State machine transition rules and non-owning incubator rejection (403).
      - Notifications recipient isolation and read tracking.
    - Full test suite: **166 passing tests across 10 test suites** (100% pass rate).
+   - Frontend Next.js build: verified with zero errors (`npm run build` passed).
+
+---
+
+## Iteration 9 Details
+
+### Completed Deliverables
+1. **Admin User Moderation & Token Invalidation**:
+   - `GET /api/v1/admin/users`: Comprehensive user administration endpoint with filters by `role`, account `status` (`active`, `suspended`, `pending_approval`), `verification_status`, and free-text search across full name, email, and organization.
+   - `POST /api/v1/admin/users/:id/suspend`: Allows administrators to suspend any user with a required reason.
+   - `POST /api/v1/admin/users/:id/reactivate`: Reactivates a suspended user account with a note.
+   - **Immediate Token Invalidation & 403 Enforcement**: The `authenticate` and `optionalAuthenticate` middleware layers evaluate user status on every incoming request. As soon as a user is suspended, all their active tokens and subsequent requests immediately return `403 ACCOUNT_SUSPENDED`.
+   - **Discovery Cascade Guard**: Suspended founders have their startups automatically withheld from public and authenticated discovery.
+
+2. **Startup Listings Moderation**:
+   - `GET /api/v1/admin/startups`: Moderator-wide inventory of all platform startups, including hidden startups and moderation flags.
+   - `POST /api/v1/admin/startups/:id/hide`: Flags a startup as hidden with an optional moderation reason.
+   - `POST /api/v1/admin/startups/:id/unhide`: Restores a hidden startup to active discovery.
+   - `DELETE /api/v1/admin/startups/:id`: Permanently removes violating startups.
+   - **Discovery Filtering**: The startup discovery engine (`discoverStartups`) checks `is_hidden !== true` and verifies founder status, instantly hiding flagged startups from search, browse, and matching.
+
+3. **Trust & Safety User Reports**:
+   - `POST /api/v1/reports`: Open to any verified user or admin (`requireVerified`). Enables reporting any target entity (`startup`, `user`, `document`, `message`, `program`, `other`) with validated `reason` and optional `details`.
+   - `GET /api/v1/admin/reports`: Admin moderation queue with status filtering (`pending`, `reviewed`, `resolved`, `dismissed`) and pagination.
+   - `GET /api/v1/admin/reports/:id`: Single report lookup with target details.
+   - `PATCH /api/v1/admin/reports/:id`: Mark report status as reviewed or add interim notes.
+   - `POST /api/v1/admin/reports/:id/resolve`: Resolves a report with a resolution note and records an audit log entry.
+   - `POST /api/v1/admin/reports/:id/dismiss`: Dismisses a false/invalid report with explanation and records an audit log entry.
+
+4. **Platform Statistics (`GET /api/v1/admin/stats`)**:
+   - Aggregates platform health indicators:
+     - `users_by_role`: count of users across founder, investor, mentor, incubator, and admin roles.
+     - `total_users`: total platform user accounts.
+     - `startups_listed`: active, non-hidden startups listed by verified founders.
+     - `pending_verifications`: outstanding profile verification requests.
+     - `open_reports`: pending/reviewed trust & safety reports awaiting action.
+     - `requests_last_30_days`: rolling total of investor access requests, pitch meeting requests, and program applications made over the last 30 days.
+
+5. **Immutable Audit Trail (`GET /api/v1/admin/audit-logs`)**:
+   - Every administrative moderation action writes to the `audit_logs` table (`user_suspended`, `user_reactivated`, `startup_hidden`, `startup_unhidden`, `startup_deleted`, `report_resolved`, `report_dismissed`, `verification_approved`, `verification_rejected`).
+   - `GET /api/v1/admin/audit-logs` provides paginated, filterable access by admin ID, action type, target type, and target ID.
+
+6. **Frontend Dynamic Integration**:
+   - **Admin Console Views (`frontend/components/AdminConsoleView.tsx`)**:
+     - *Admin Dashboard*: Real-time platform KPI cards (`Total Users`, `Startups Listed`, `Pending Verifications`, `Open Reports`, `30-Day Activity`), role breakdown badges, and quick-action navigation.
+     - *Verification Queue*: Live review table with 1-click Approve and Reject actions.
+     - *Users Management*: Live user table with role/status filters, search, and dynamic Suspend / Reactivate action modals.
+     - *Startup Listings*: Moderator view with stage/status filters and 1-click Hide, Unhide, and Delete actions.
+     - *Reported Content*: Active trust & safety queue with priority badges, reason descriptions, and Resolve / Dismiss moderation modals.
+   - **Interactive Report Modal (`frontend/components/ReportModal.tsx`)**:
+     - Generic modal allowing verified community members to report startups or profiles with categorized reasons.
+     - Added "Report startup" button in the Startup Detail Modal.
+     - Added "Report profile" button on User Profile pages.
+
+7. **Automated Testing Suite (`backend/src/tests/iteration9.test.ts`)**:
+   - 12 comprehensive unit and integration tests:
+     - Loop testing across all 18 `/admin/*` routes to guarantee strict 403 blocking for founders, investors, mentors, and incubators.
+     - User suspension testing verifying that active JWTs receive 403 on subsequent calls across all endpoints.
+     - Discovery isolation verifying that hidden startups and startups owned by suspended founders vanish from discovery.
+     - End-to-end report creation, admin review, and resolution flows.
+     - Platform statistics validation matching seed data.
+     - Audit log creation verifying that moderation actions record structured audit entries.
+   - Full test suite: **178 passing tests across 11 test suites** (100% pass rate).
    - Frontend Next.js build: verified with zero errors (`npm run build` passed).
 
 ---

@@ -1371,3 +1371,161 @@ Marks an individual notification as read.
 Marks all unread notifications for the user as read.
 - **Auth**: `Bearer <token>`
 - **Response**: `200 OK`
+
+---
+
+## Endpoints (Iteration 9: Admin, Moderation, Reports and Platform Protection)
+
+### 9.1 Trust & Safety: User Reports
+
+#### `POST /api/v1/reports`
+Submits a trust & safety report against a startup, user profile, document, message, program, or other entity.
+- **Auth**: `Bearer <token>` (Verified community member or admin; unverified users receive `403 UNVERIFIED_ACCOUNT`)
+- **Request Body**:
+```json
+{
+  "target_type": "startup",
+  "target_id": "s0000000-0000-0000-0000-000000000001",
+  "reason": "Misleading traction and non-verifiable funding claim",
+  "details": "The claims in the pitch deck conflict with publicly registered filings."
+}
+```
+- **Response**: `201 Created`
+
+---
+
+### 9.2 Admin: User Moderation & Suspension
+
+#### `GET /api/v1/admin/users`
+Lists platform users with role, status, verification status, and search filters.
+- **Auth**: `Bearer <token>` (`admin` role required; all non-admins receive `403 FORBIDDEN`)
+- **Query Parameters**:
+  - `role`: Filter by `founder`, `investor`, `mentor`, `incubator`, `admin`.
+  - `status`: Filter by `active`, `suspended`, `pending_approval`.
+  - `verification_status`: Filter by `pending`, `verified`, `rejected`.
+  - `search`: Filter across full name, email, organization.
+- **Response**: `200 OK`
+
+#### `POST /api/v1/admin/users/:id/suspend`
+Suspends a user account.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Token Invalidation Rule**: Suspended users are immediately denied access on all routes with `403 ACCOUNT_SUSPENDED`.
+- **Discovery Cascade Rule**: All startups owned by a suspended user immediately disappear from public and authenticated discovery.
+- **Request Body**:
+```json
+{
+  "reason": "Repeated violations of community guidelines regarding false claims"
+}
+```
+- **Audit**: Writes `user_suspended` action to `audit_logs`.
+- **Response**: `200 OK`
+
+#### `POST /api/v1/admin/users/:id/reactivate`
+Reactivates a suspended user account.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Request Body**:
+```json
+{
+  "reason": "Account restored following compliance review"
+}
+```
+- **Audit**: Writes `user_reactivated` action to `audit_logs`.
+- **Response**: `200 OK`
+
+---
+
+### 9.3 Admin: Startup Moderation & Listings
+
+#### `GET /api/v1/admin/startups`
+Lists all startups across the platform, including hidden startups.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Query Parameters**: `status`, `search`, `page`, `limit`.
+- **Response**: `200 OK`
+
+#### `POST /api/v1/admin/startups/:id/hide`
+Hides a startup listing from discovery.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Safety Guarantee**: The hidden startup immediately vanishes from discovery (`GET /api/v1/startups`).
+- **Request Body**: Optional `{ "reason": "Copyright dispute" }`
+- **Audit**: Writes `startup_hidden` action to `audit_logs`.
+- **Response**: `200 OK`
+
+#### `POST /api/v1/admin/startups/:id/unhide`
+Restores a hidden startup listing back into discovery.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Audit**: Writes `startup_unhidden` action to `audit_logs`.
+- **Response**: `200 OK`
+
+#### `DELETE /api/v1/admin/startups/:id`
+Permanently purges a fraudulent or violating startup.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Audit**: Writes `startup_deleted` action to `audit_logs`.
+- **Response**: `200 OK`
+
+---
+
+### 9.4 Admin: Reports Queue & Resolution
+
+#### `GET /api/v1/admin/reports`
+Lists reports submitted across the platform.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Query Parameters**: `status` (`pending`, `reviewed`, `resolved`, `dismissed`), `target_type`, `page`, `limit`.
+- **Response**: `200 OK`
+
+#### `POST /api/v1/admin/reports/:id/resolve`
+Resolves a reported issue with moderator notes.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Request Body**:
+```json
+{
+  "resolution_note": "Founder provided registered incorporation certificate."
+}
+```
+- **Audit**: Writes `report_resolved` action to `audit_logs`.
+- **Response**: `200 OK`
+
+#### `POST /api/v1/admin/reports/:id/dismiss`
+Dismisses a report deemed invalid or spam.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Request Body**:
+```json
+{
+  "resolution_note": "Report determined to be invalid."
+}
+```
+- **Audit**: Writes `report_dismissed` action to `audit_logs`.
+- **Response**: `200 OK`
+
+---
+
+### 9.5 Admin: Platform Statistics & Audit Trail
+
+#### `GET /api/v1/admin/stats`
+Aggregates key health and moderation metrics across the platform.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Response**: `200 OK`
+```json
+{
+  "data": {
+    "users_by_role": {
+      "founder": 3,
+      "investor": 2,
+      "mentor": 2,
+      "incubator": 2,
+      "admin": 1
+    },
+    "total_users": 10,
+    "startups_listed": 5,
+    "pending_verifications": 3,
+    "open_reports": 2,
+    "requests_last_30_days": 12
+  }
+}
+```
+
+#### `GET /api/v1/admin/audit-logs`
+Provides an immutable audit trail of all administrative and moderation actions.
+- **Auth**: `Bearer <token>` (`admin` role required)
+- **Query Parameters**: `action`, `admin_id`, `target_type`, `target_id`, `limit`, `offset`.
+- **Response**: `200 OK`
+
