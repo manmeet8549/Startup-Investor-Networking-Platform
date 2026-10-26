@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pino.log*
+
+# Next.js build
+.next/
+out/
+dist/
+backend/dist/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Coverage
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
