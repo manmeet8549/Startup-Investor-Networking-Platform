@@ -10,7 +10,7 @@
 | **Iteration 4** | **Startup Profiles, Team CRUD, Pitch Decks, Supabase Storage & Access Control** | **Completed** |
 | **Iteration 5** | **Discovery, Search, Multi-Filters, Query Optimization & Dynamic Frontend** | **Completed** |
 | **Iteration 6** | **Investor Preferences, Transparent Smart Matching & Re-ranking** | **Completed** |
-| **Iteration 7** | Mentorship Requests & Incubator Programs Lifecycle | Planned |
+| **Iteration 7** | **Investor Engagement, Pipeline Tracking, Pitch Meetings, Connections & Messaging** | **Completed** |
 
 ---
 
@@ -260,6 +260,72 @@
      - Full test suite: **129 passing tests across 8 test suites** with zero failures.
 
 ---
+
+---
+
+## Iteration 7 Details
+
+### Completed Deliverables
+1. **Database Schema & Migrations (`20261027000007_pipeline_engagement_and_messaging.sql`)**:
+   - Extended `pitch_requests` with meeting negotiation fields: `proposed_date`, `message`, `counter_date`, `response_message`.
+   - Created `pipeline_history` table tracking all investor pipeline state transitions (`from_status`, `to_status`, `notes`, `created_at`).
+   - Created `pitch_request_messages` table supporting typed due-diligence discussions on pitch requests (`information_request`, `information_response`, `general`).
+   - Configured Row Level Security (RLS) policies guaranteeing privacy of investor notes, watchlists, pitch negotiation threads, and direct messages.
+
+2. **Watchlist & Private Notes Endpoints**:
+   - `POST /api/v1/watchlist/:startup_id`: Idempotent addition to investor watchlist.
+   - `DELETE /api/v1/watchlist/:startup_id`: Removal from investor watchlist.
+   - `GET /api/v1/watchlist`: Returns saved startups enriched with current pipeline status and private notes.
+   - `GET /api/v1/startups/:id/notes`: Private investor note retrieval (strictly isolated from founders and other investors).
+   - `PUT /api/v1/startups/:id/notes`: Upsert private note.
+   - `DELETE /api/v1/startups/:id/notes`: Delete private note.
+
+3. **Deal Pipeline State Machine & History**:
+   - `GET /api/v1/pipeline`: Returns investor dealflow grouped into 5 stages: `interested`, `meeting_requested`, `in_discussion`, `follow_up`, `passed`.
+   - `PUT /api/v1/pipeline/:startup_id`: Validated state machine transitions:
+     - `interested` → `meeting_requested`, `follow_up`, `passed`
+     - `meeting_requested` → `in_discussion`, `follow_up`, `passed`
+     - `in_discussion` → `follow_up`, `passed`, `meeting_requested`
+     - `follow_up` → `meeting_requested`, `in_discussion`, `passed`
+     - `passed` → `interested`, `follow_up`
+   - `GET /api/v1/pipeline/:startup_id/history`: Full audit trail of all historical stage changes.
+
+4. **Pitch Meeting Negotiation & Typed Due-Diligence Messages**:
+   - `POST /api/v1/pitch-requests`: Propose pitch meeting with `proposed_date` and introductory `message`. Automatically updates investor pipeline to `meeting_requested`.
+   - `GET /api/v1/pitch-requests`: Role-aware listing (investor sees outgoing; founder sees incoming requests for their startups).
+   - `GET /api/v1/pitch-requests/:id`: Request details with nested typed message thread.
+   - `PATCH /api/v1/pitch-requests/:id/respond`: Founder response with `accept`, `decline`, or `date_proposed` (counter-date + counter-message). Enforces strict founder ownership (403 for unauthorized founders).
+   - `POST /api/v1/pitch-requests/:id/messages`: Typed due-diligence questions and replies (`info_request` vs `info_response`).
+
+5. **Connections & Gated Direct Messaging**:
+   - `POST /api/v1/connections`: Connection requests with duplicate rejection (409).
+   - `PATCH /api/v1/connections/:id`: Accept or decline connection request.
+   - `GET /api/v1/connections`: List approved or pending connections.
+   - `GET /api/v1/conversations`: List active 1-to-1 conversation threads with unread counts and last message preview.
+   - `GET /api/v1/conversations/:id/messages`: Fetch chronological message thread.
+   - `POST /api/v1/conversations/:id/messages`: Send message. Strictly blocks messaging between unconnected users with 403 `MESSAGING_NOT_ALLOWED` unless parties have an accepted pitch meeting request.
+   - `PATCH /api/v1/messages/:id/read` & `PATCH /api/v1/conversations/:id/read`: Mark messages as read.
+   - Real-time in-app notification dispatch on every event via `notify()`.
+
+6. **Frontend Dynamic Integration**:
+   - **Investor Pipeline Board (`page === 'Pipeline'`)**: 5-column kanban board with allowed state machine transition buttons, note previews, history counts, and status audit modal.
+   - **Watchlist & Notes (`page === 'Watchlist & Notes'`)**: Interactive watchlist grid with private note editor and meeting request trigger.
+   - **Meeting Requests Page (`page === 'Meeting Requests'`)**: Full negotiation flow with date selection, counter-proposals, and typed diligence thread drawer.
+   - **Founder Dashboard Card**: Pending meeting requests widget on Founder dashboard with 1-click Accept.
+   - **Messages Page (`page === 'Messages'`)**: 2-pane conversation view with 15-second polling interval and optimistic message sending with automatic rollback on error.
+   - **Add to Watchlist Buttons**: Embedded across Explore Startups, Discover Startups, and Recommended Startups.
+
+7. **Automated Testing Suite (`backend/src/tests/iteration7.test.ts`)**:
+   - 21 unit and integration tests passing:
+     - Watchlist idempotency and cross-user privacy isolation.
+     - Notes privacy (investor only; invisible to other investors and founders).
+     - Valid and invalid pipeline transitions through state machine.
+     - Pitch request creation, duplicate 409, and counter-date negotiation.
+     - Cross-founder security: 403 when a founder attempts to respond to another founder's pitch request.
+     - Connections lifecycle (request, duplicate 409, accept).
+     - Direct messaging guards: strictly blocks unconnected users with 403; unlocks messaging upon accepted pitch request or connection.
+   - Total backend test suite: **150 passing tests across 9 test suites** (100% pass rate).
+   - Frontend Next.js build: verified with zero errors (`npm run build` passed).
 
 ## Assumptions
 1. **Database Role Source of Truth**: The JWT contains the user ID (`sub`). The user's role is always fetched directly from the database `profiles` table to prevent token manipulation or client-side role tampering.

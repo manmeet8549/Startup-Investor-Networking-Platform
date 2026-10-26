@@ -984,3 +984,197 @@ Investor flow: Retrieves ranked listed startups compatible with the authenticate
   }
 }
 ```
+
+---
+
+## Iteration 7: Investor Engagement, Connections and Messaging
+
+### 1. Watchlist & Private Notes
+
+#### `POST /api/v1/watchlist/:startup_id`
+Adds a startup to the authenticated investor's watchlist. Idempotent: returns 201 on initial add and 200/201 on subsequent requests.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Response**: `201 Created`
+```json
+{
+  "data": {
+    "id": "w-i0000000-0000-0000-0000-000000000001-s0000000-0000-0000-0000-000000000001",
+    "investor_id": "i0000000-0000-0000-0000-000000000001",
+    "startup_id": "s0000000-0000-0000-0000-000000000001",
+    "created_at": "2026-10-27T02:00:00.000Z"
+  },
+  "message": "Startup added to watchlist"
+}
+```
+
+#### `DELETE /api/v1/watchlist/:startup_id`
+Removes a startup from the investor's watchlist.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Response**: `200 OK`
+
+#### `GET /api/v1/watchlist`
+Lists all startups in the investor's watchlist, populated with current pipeline status and the investor's confidential note.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Response**: `200 OK`
+
+#### `GET /api/v1/startups/:id/notes`
+Retrieves the investor's confidential note for a startup. Visible ONLY to the investor who created it.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Response**: `200 OK`
+
+#### `PUT /api/v1/startups/:id/notes`
+Upserts a private note for a startup.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Request Body**:
+```json
+{
+  "note": "Pilot metrics in Ludhiana show 18% cost reduction for wheat farmers. Schedule meeting."
+}
+```
+- **Response**: `200 OK`
+
+#### `DELETE /api/v1/startups/:id/notes`
+Deletes the private note.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Response**: `200 OK`
+
+---
+
+### 2. Deal Pipeline State Machine & History
+
+#### `GET /api/v1/pipeline`
+Returns all startups in the investor's pipeline grouped into 5 stages: `interested`, `meeting_requested`, `in_discussion`, `follow_up`, `passed`.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Response**: `200 OK`
+
+#### `PUT /api/v1/pipeline/:startup_id`
+Updates the pipeline status of a startup through a validated state machine. Invalid transitions are rejected with 400 `INVALID_TRANSITION`.
+- **Allowed Transitions**:
+  - `interested` → `meeting_requested`, `follow_up`, `passed`
+  - `meeting_requested` → `in_discussion`, `follow_up`, `passed`
+  - `in_discussion` → `follow_up`, `passed`, `meeting_requested`
+  - `follow_up` → `meeting_requested`, `in_discussion`, `passed`
+  - `passed` → `interested`, `follow_up`
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Request Body**:
+```json
+{
+  "status": "meeting_requested",
+  "notes": "Intro meeting invite sent"
+}
+```
+- **Response**: `200 OK`
+
+#### `GET /api/v1/pipeline/:startup_id/history`
+Returns the full chronological audit history of status changes for this startup in the investor's pipeline.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Response**: `200 OK`
+
+---
+
+### 3. Pitch Meeting Requests & Clarification Messages
+
+#### `POST /api/v1/pitch-requests`
+Creates a pitch meeting request for a startup with a proposed date and introductory message. Automatically moves the startup into `meeting_requested` pipeline status. Duplicate pending requests return 409 `DUPLICATE_PITCH_REQUEST`.
+- **Auth**: `Bearer <token>` (`investor` or `admin`)
+- **Request Body**:
+```json
+{
+  "startup_id": "s0000000-0000-0000-0000-000000000001",
+  "proposed_date": "2026-11-05T10:00:00Z",
+  "message": "We loved your deck and would like to schedule a 30-min intro pitch meeting."
+}
+```
+- **Response**: `201 Created`
+
+#### `GET /api/v1/pitch-requests`
+Returns pitch meeting requests. For investors: outgoing requests. For founders: incoming requests for their registered startups.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `GET /api/v1/pitch-requests/:id`
+Retrieves a single pitch request along with its typed clarification message thread.
+- **Auth**: `Bearer <token>` (Participants only)
+- **Response**: `200 OK`
+
+#### `PATCH /api/v1/pitch-requests/:id/respond`
+Allows the founder of the startup to respond: `accept`, `decline`, or propose another date (`date_proposed` with `counter_date` and `message`). Enforces strict founder ownership; unauthorized founders receive 403 `FORBIDDEN_RESOURCE`.
+- **Auth**: `Bearer <token>` (Startup founder only)
+- **Request Body**:
+```json
+{
+  "action": "date_proposed",
+  "counter_date": "2026-11-07T14:00:00Z",
+  "message": "Available Friday afternoon instead."
+}
+```
+- **Response**: `200 OK`
+
+#### `POST /api/v1/pitch-requests/:id/messages`
+Sends a typed message on the pitch request thread for due-diligence questions.
+- **Auth**: `Bearer <token>` (Request participants only)
+- **Request Body**:
+```json
+{
+  "content": "Could you provide recent monthly sensor installation numbers?",
+  "message_type": "info_request"
+}
+```
+- **Response**: `201 Created`
+
+---
+
+### 4. Connections & Direct Messaging
+
+#### `POST /api/v1/connections`
+Sends a connection request to another verified user. Duplicate requests return 409.
+- **Auth**: `Bearer <token>`
+- **Request Body**:
+```json
+{
+  "recipient_id": "f0000000-0000-0000-0000-000000000002"
+}
+```
+- **Response**: `201 Created`
+
+#### `PATCH /api/v1/connections/:id`
+Accepts or declines a connection request. Only the recipient can accept or decline.
+- **Auth**: `Bearer <token>` (Recipient only)
+- **Request Body**:
+```json
+{
+  "action": "accept"
+}
+```
+- **Response**: `200 OK`
+
+#### `GET /api/v1/connections`
+Lists user connections with partner profiles.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `GET /api/v1/conversations`
+Lists all active 1-to-1 conversation threads with unread counts and last message snippet.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `GET /api/v1/conversations/:id/messages`
+Fetches message history between the caller and the specified user.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `POST /api/v1/conversations/:id/messages`
+Sends a direct message. **Security Rule**: Messaging is blocked between unconnected users with 403 `MESSAGING_NOT_ALLOWED` unless there is an approved connection or an accepted pitch meeting request.
+- **Auth**: `Bearer <token>`
+- **Request Body**:
+```json
+{
+  "content": "Thanks for accepting the meeting. Where should we send calendar invite?"
+}
+```
+- **Response**: `201 Created`
+
+#### `PATCH /api/v1/conversations/:id/read`
+Marks all unread messages in the conversation as read.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`

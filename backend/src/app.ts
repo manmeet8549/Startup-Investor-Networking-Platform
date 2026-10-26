@@ -15,6 +15,7 @@ import { startupRouter } from './routes/startup.routes.js';
 import { documentRouter } from './routes/document.routes.js';
 import { metaRouter } from './routes/meta.routes.js';
 import { matchingRouter, investorRouter } from './routes/matching.routes.js';
+import { engagementRouter } from './routes/engagement.routes.js';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware.js';
 import { config } from './config.js';
 
@@ -84,6 +85,7 @@ apiRouter.use(documentRouter);
 apiRouter.use(metaRouter);
 apiRouter.use('/matches', matchingRouter);
 apiRouter.use('/investors', investorRouter);
+apiRouter.use(engagementRouter);
 
 app.use('/api/v1', apiRouter);
 

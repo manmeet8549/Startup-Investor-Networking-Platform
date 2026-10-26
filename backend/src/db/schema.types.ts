@@ -162,15 +162,38 @@ export interface InvestorStartupStatus {
   updated_at: string;
 }
 
+export interface PipelineHistory {
+  id: string;
+  investor_id: string;
+  startup_id: string;
+  from_status: PipelineStatus | null;
+  to_status: PipelineStatus;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface PitchRequest {
   id: string;
   startup_id: string;
   investor_id: string;
   status: RequestStatus;
-  pitch_deck_url: string | null;
-  notes: string | null;
+  proposed_date?: string | null;
+  message?: string | null;
+  counter_date?: string | null;
+  response_message?: string | null;
+  pitch_deck_url?: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PitchRequestMessage {
+  id: string;
+  pitch_request_id: string;
+  sender_id: string;
+  message_type: 'info_request' | 'info_response' | 'general';
+  content: string;
+  created_at: string;
 }
 
 export interface Connection {

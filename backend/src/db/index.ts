@@ -27,6 +27,10 @@ import type {
   IncubatorProgram,
   Application,
   Notification,
+  PipelineHistory,
+  PitchRequestMessage,
+  PipelineStatus,
+  RequestStatus,
   MatchScore,
   Report,
 } from './schema.types.js';
@@ -92,6 +96,8 @@ class InMemoryDatabase {
   investorNotes: Map<string, InvestorNote> = new Map();
   investorStartupStatus: Map<string, InvestorStartupStatus> = new Map();
   pitchRequests: Map<string, PitchRequest> = new Map();
+  pitchRequestMessages: Map<string, PitchRequestMessage> = new Map();
+  pipelineHistory: Map<string, PipelineHistory> = new Map();
   connections: Map<string, Connection> = new Map();
   messages: Map<string, Message> = new Map();
   mentorshipRequests: Map<string, MentorshipRequest> = new Map();
@@ -122,6 +128,8 @@ class InMemoryDatabase {
     this.investorNotes.clear();
     this.investorStartupStatus.clear();
     this.pitchRequests.clear();
+    this.pitchRequestMessages.clear();
+    this.pipelineHistory.clear();
     this.connections.clear();
     this.messages.clear();
     this.mentorshipRequests.clear();
@@ -915,23 +923,335 @@ class InMemoryDatabase {
     return { ...clone };
   }
 
-  // --- Watchlist with uniqueness constraint ---
+  // --- Watchlist Methods ---
   addToWatchlist(entry: WatchlistEntry): WatchlistEntry {
     for (const existing of this.watchlist.values()) {
       if (existing.investor_id === entry.investor_id && existing.startup_id === entry.startup_id) {
         throw new Error('unique_watchlist_entry: startup is already in watchlist');
       }
     }
-    const clone = { ...entry, created_at: new Date().toISOString() };
+    const clone = { ...entry, created_at: entry.created_at || new Date().toISOString() };
     this.watchlist.set(clone.id, clone);
     return { ...clone };
   }
 
-  // --- Investor Notes ---
+  removeFromWatchlist(investorId: string, startupId: string): boolean {
+    for (const [id, w] of this.watchlist.entries()) {
+      if (w.investor_id === investorId && w.startup_id === startupId) {
+        this.watchlist.delete(id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  isInWatchlist(investorId: string, startupId: string): boolean {
+    for (const w of this.watchlist.values()) {
+      if (w.investor_id === investorId && w.startup_id === startupId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  getWatchlist(investorId: string): Array<WatchlistEntry & { startup: Startup; note: string | null; pipeline_status: PipelineStatus | null }> {
+    const results: Array<WatchlistEntry & { startup: Startup; note: string | null; pipeline_status: PipelineStatus | null }> = [];
+    for (const w of this.watchlist.values()) {
+      if (w.investor_id === investorId) {
+        const st = this.startups.get(w.startup_id);
+        if (st) {
+          const noteObj = this.getInvestorNote(investorId, w.startup_id);
+          const pipeObj = this.getPipelineStatus(investorId, w.startup_id);
+          results.push({
+            ...w,
+            startup: { ...st },
+            note: noteObj ? noteObj.note : null,
+            pipeline_status: pipeObj ? pipeObj.status : null,
+          });
+        }
+      }
+    }
+    return results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  // --- Investor Private Notes ---
+  getInvestorNote(investorId: string, startupId: string): InvestorNote | null {
+    for (const n of this.investorNotes.values()) {
+      if (n.investor_id === investorId && n.startup_id === startupId) {
+        return { ...n };
+      }
+    }
+    return null;
+  }
+
   saveInvestorNote(note: InvestorNote): InvestorNote {
-    const clone = { ...note, updated_at: new Date().toISOString() };
+    for (const [id, existing] of this.investorNotes.entries()) {
+      if (existing.investor_id === note.investor_id && existing.startup_id === note.startup_id) {
+        const updated = {
+          ...existing,
+          note: note.note,
+          updated_at: new Date().toISOString(),
+        };
+        this.investorNotes.set(id, updated);
+        return { ...updated };
+      }
+    }
+    const clone = {
+      ...note,
+      created_at: note.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
     this.investorNotes.set(clone.id, clone);
     return { ...clone };
+  }
+
+  deleteInvestorNote(investorId: string, startupId: string): boolean {
+    for (const [id, n] of this.investorNotes.entries()) {
+      if (n.investor_id === investorId && n.startup_id === startupId) {
+        this.investorNotes.delete(id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // --- Pipeline Tracker & State Machine ---
+  getPipelineStatus(investorId: string, startupId: string): InvestorStartupStatus | null {
+    for (const p of this.investorStartupStatus.values()) {
+      if (p.investor_id === investorId && p.startup_id === startupId) {
+        return { ...p };
+      }
+    }
+    return null;
+  }
+
+  setPipelineStatus(
+    investorId: string,
+    startupId: string,
+    toStatus: PipelineStatus,
+    notes?: string
+  ): { current: InvestorStartupStatus; history: PipelineHistory } {
+    const existing = this.getPipelineStatus(investorId, startupId);
+    const fromStatus = existing ? existing.status : null;
+
+    let updatedRecord: InvestorStartupStatus;
+    if (existing) {
+      updatedRecord = {
+        ...existing,
+        status: toStatus,
+        updated_at: new Date().toISOString(),
+      };
+      this.investorStartupStatus.set(existing.id, updatedRecord);
+    } else {
+      updatedRecord = {
+        id: `pipe-${investorId}-${startupId}`,
+        investor_id: investorId,
+        startup_id: startupId,
+        status: toStatus,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.investorStartupStatus.set(updatedRecord.id, updatedRecord);
+    }
+
+    const historyEntry: PipelineHistory = {
+      id: `pipehist-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      investor_id: investorId,
+      startup_id: startupId,
+      from_status: fromStatus,
+      to_status: toStatus,
+      notes: notes || null,
+      created_at: new Date().toISOString(),
+    };
+    this.pipelineHistory.set(historyEntry.id, historyEntry);
+
+    return { current: { ...updatedRecord }, history: { ...historyEntry } };
+  }
+
+  getPipelineHistory(investorId: string, startupId: string): PipelineHistory[] {
+    return Array.from(this.pipelineHistory.values())
+      .filter((h) => h.investor_id === investorId && h.startup_id === startupId)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+
+  getPipelineGrouped(investorId: string): Record<PipelineStatus, Array<InvestorStartupStatus & { startup: Startup; note: string | null; history_count: number }>> {
+    const groups: Record<PipelineStatus, Array<InvestorStartupStatus & { startup: Startup; note: string | null; history_count: number }>> = {
+      interested: [],
+      meeting_requested: [],
+      in_discussion: [],
+      follow_up: [],
+      passed: [],
+    };
+
+    for (const p of this.investorStartupStatus.values()) {
+      if (p.investor_id === investorId && groups[p.status]) {
+        const st = this.startups.get(p.startup_id);
+        if (st) {
+          const noteObj = this.getInvestorNote(investorId, p.startup_id);
+          const hist = this.getPipelineHistory(investorId, p.startup_id);
+          groups[p.status].push({
+            ...p,
+            startup: { ...st },
+            note: noteObj ? noteObj.note : null,
+            history_count: hist.length,
+          });
+        }
+      }
+    }
+    return groups;
+  }
+
+  // --- Pitch Requests ---
+  createPitchRequest(pitchReq: PitchRequest): PitchRequest {
+    for (const existing of this.pitchRequests.values()) {
+      if (
+        existing.startup_id === pitchReq.startup_id &&
+        existing.investor_id === pitchReq.investor_id &&
+        existing.status === 'pending'
+      ) {
+        throw new Error('unique_pitch_request: a pending pitch request already exists for this startup and investor');
+      }
+    }
+    const clone = {
+      ...pitchReq,
+      created_at: pitchReq.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.pitchRequests.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  getPitchRequestById(id: string): PitchRequest | null {
+    const req = this.pitchRequests.get(id);
+    return req ? { ...req } : null;
+  }
+
+  listPitchRequests(filter: { startupId?: string; investorId?: string; founderId?: string; status?: RequestStatus }): PitchRequest[] {
+    return Array.from(this.pitchRequests.values()).filter((r) => {
+      if (filter.startupId && r.startup_id !== filter.startupId) return false;
+      if (filter.investorId && r.investor_id !== filter.investorId) return false;
+      if (filter.status && r.status !== filter.status) return false;
+      if (filter.founderId) {
+        const st = this.startups.get(r.startup_id);
+        if (!st || st.founder_id !== filter.founderId) return false;
+      }
+      return true;
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  updatePitchRequest(id: string, updates: Partial<PitchRequest>): PitchRequest | null {
+    const existing = this.pitchRequests.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.pitchRequests.set(id, updated);
+    return { ...updated };
+  }
+
+  addPitchRequestMessage(msg: PitchRequestMessage): PitchRequestMessage {
+    const clone = { ...msg, created_at: msg.created_at || new Date().toISOString() };
+    this.pitchRequestMessages.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  listPitchRequestMessages(pitchRequestId: string): PitchRequestMessage[] {
+    return Array.from(this.pitchRequestMessages.values())
+      .filter((m) => m.pitch_request_id === pitchRequestId)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+
+  // --- Connections ---
+  createConnection(userAId: string, userBId: string): Connection {
+    if (userAId === userBId) {
+      throw new Error('check_connections_distinct_users: user_a and user_b must be distinct');
+    }
+    const existing = this.findConnection(userAId, userBId);
+    if (existing) {
+      throw new Error('unique_connection_pair: connection already exists between these users');
+    }
+    const conn: Connection = {
+      id: `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      user_a_id: userAId,
+      user_b_id: userBId,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.connections.set(conn.id, conn);
+    return { ...conn };
+  }
+
+  findConnection(userAId: string, userBId: string): Connection | null {
+    for (const c of this.connections.values()) {
+      if (
+        (c.user_a_id === userAId && c.user_b_id === userBId) ||
+        (c.user_a_id === userBId && c.user_b_id === userAId)
+      ) {
+        return { ...c };
+      }
+    }
+    return null;
+  }
+
+  getConnectionById(id: string): Connection | null {
+    const c = this.connections.get(id);
+    return c ? { ...c } : null;
+  }
+
+  listConnections(userId: string, status?: RequestStatus): Array<Connection & { partner: Profile }> {
+    const results: Array<Connection & { partner: Profile }> = [];
+    for (const c of this.connections.values()) {
+      if (c.user_a_id === userId || c.user_b_id === userId) {
+        if (status && c.status !== status) continue;
+        const partnerId = c.user_a_id === userId ? c.user_b_id : c.user_a_id;
+        const partner = this.profiles.get(partnerId);
+        if (partner) {
+          results.push({ ...c, partner: { ...partner } });
+        }
+      }
+    }
+    return results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  updateConnection(id: string, status: RequestStatus): Connection | null {
+    const existing = this.connections.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    this.connections.set(id, updated);
+    return { ...updated };
+  }
+
+  areUsersConnected(userAId: string, userBId: string): boolean {
+    const c = this.findConnection(userAId, userBId);
+    return !!c && c.status === 'approved';
+  }
+
+  hasAcceptedPitchRequest(userAId: string, userBId: string): boolean {
+    for (const pr of this.pitchRequests.values()) {
+      if (pr.status === 'approved') {
+        const st = this.startups.get(pr.startup_id);
+        if (!st) continue;
+        if (
+          (pr.investor_id === userAId && st.founder_id === userBId) ||
+          (pr.investor_id === userBId && st.founder_id === userAId)
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  canUsersMessage(userAId: string, userBId: string): boolean {
+    if (userAId === userBId) return false;
+    return this.areUsersConnected(userAId, userBId) || this.hasAcceptedPitchRequest(userAId, userBId);
   }
 
   // --- Messages with distinct user constraint ---
@@ -939,9 +1259,75 @@ class InMemoryDatabase {
     if (msg.sender_id === msg.recipient_id) {
       throw new Error('check_messages_distinct_users: sender and recipient must be distinct');
     }
-    const clone = { ...msg, created_at: new Date().toISOString() };
+    const clone = { ...msg, created_at: msg.created_at || new Date().toISOString() };
     this.messages.set(clone.id, clone);
     return { ...clone };
+  }
+
+  listMessagesBetween(userAId: string, userBId: string): Message[] {
+    return Array.from(this.messages.values())
+      .filter(
+        (m) =>
+          (m.sender_id === userAId && m.recipient_id === userBId) ||
+          (m.sender_id === userBId && m.recipient_id === userAId)
+      )
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+
+  markMessagesAsRead(senderId: string, recipientId: string): number {
+    let count = 0;
+    const now = new Date().toISOString();
+    for (const [id, m] of this.messages.entries()) {
+      if (m.sender_id === senderId && m.recipient_id === recipientId && !m.read_at) {
+        this.messages.set(id, { ...m, read_at: now });
+        count++;
+      }
+    }
+    return count;
+  }
+
+  listConversations(userId: string): Array<{
+    conversation_id: string;
+    other_user: Profile;
+    last_message: Message;
+    unread_count: number;
+  }> {
+    const partnerMessages = new Map<string, Message[]>();
+
+    for (const m of this.messages.values()) {
+      if (m.sender_id === userId || m.recipient_id === userId) {
+        const partnerId = m.sender_id === userId ? m.recipient_id : m.sender_id;
+        const list = partnerMessages.get(partnerId) || [];
+        list.push(m);
+        partnerMessages.set(partnerId, list);
+      }
+    }
+
+    const conversations: Array<{
+      conversation_id: string;
+      other_user: Profile;
+      last_message: Message;
+      unread_count: number;
+    }> = [];
+
+    for (const [partnerId, msgs] of partnerMessages.entries()) {
+      const partner = this.profiles.get(partnerId);
+      if (!partner) continue;
+      msgs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const lastMessage = msgs[0];
+      const unreadCount = msgs.filter((m) => m.sender_id === partnerId && m.recipient_id === userId && !m.read_at).length;
+
+      conversations.push({
+        conversation_id: partnerId,
+        other_user: { ...partner },
+        last_message: { ...lastMessage },
+        unread_count: unreadCount,
+      });
+    }
+
+    return conversations.sort(
+      (a, b) => new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime()
+    );
   }
 
   // --- Mentor Feedback with rating constraint ---

@@ -2,6 +2,12 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { apiClient } from '../lib/api-client';
 import { useAuth } from '../context/AuthContext';
+import { PipelineBoard } from '../components/PipelineBoard';
+import { WatchlistSection } from '../components/WatchlistSection';
+import { MeetingRequestsView } from '../components/MeetingRequestsView';
+import { MessagesView } from '../components/MessagesView';
+import { PitchRequestModal } from '../components/PitchRequestModal';
+import { PipelineHistoryModal } from '../components/PipelineHistoryModal';
 import { ArrowDownRight, ArrowRight, Bell, Bookmark, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Clock3, Compass, FileText, Filter, Handshake, HeartHandshake, LayoutDashboard, Lightbulb, LogOut, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings, ShieldCheck, Sparkles, Users, X, MapPin, TrendingUp, CalendarDays, Eye, LockKeyhole, CheckCircle2, CircleDashed, SlidersHorizontal, Upload, Send, UserRound, PanelsTopLeft, GraduationCap, ChartNoAxesCombined, ExternalLink, Inbox, Trash2 } from 'lucide-react';
 
 import { 
@@ -214,6 +220,311 @@ export default function Home(){
  const [newStartup, setNewStartup] = useState({ name: '', tagline: '', sector: 'AgriTech', stage: 'Idea', location: '', ask: '₹10L', description: '' });
  const [notificationsOpen, setNotificationsOpen] = useState(false);
  const [notes, setNotes] = useState<Record<string, string>>({ 'Northstar Ventures': 'Follow up after pilot results.' });
+
+  // --- Iteration 7: Engagement, Watchlist, Pipeline, Pitch Requests & Messaging ---
+  const [pipelineGroups, setPipelineGroups] = useState<Record<string, any[]>>({
+    interested: [],
+    meeting_requested: [],
+    in_discussion: [],
+    follow_up: [],
+    passed: [],
+  });
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [pitchRequests, setPitchRequests] = useState<any[]>([]);
+  const [pitchRequestsLoading, setPitchRequestsLoading] = useState(false);
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [activeConversationUserId, setActiveConversationUserId] = useState<string | null>(null);
+  const [conversationMessages, setConversationMessages] = useState<any[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [lastPolledAt, setLastPolledAt] = useState<Date | null>(null);
+  const [pitchModalStartup, setPitchModalStartup] = useState<any | null>(null);
+  const [historyModalData, setHistoryModalData] = useState<{ startupName: string; history: any[]; loading: boolean } | null>(null);
+
+  const fetchPipeline = useCallback(async () => {
+    try {
+      setPipelineLoading(true);
+      const res = await apiClient.get<Record<string, any[]>>('/pipeline');
+      if (res && res.data) {
+        setPipelineGroups(res.data);
+      }
+    } catch (err: any) {
+      console.warn('Pipeline fetch error:', err);
+    } finally {
+      setPipelineLoading(false);
+    }
+  }, []);
+
+  const handleUpdatePipelineStatus = async (startupId: string, toStatus: string, notes?: string) => {
+    const previousGroups = { ...pipelineGroups };
+    // Optimistic update
+    setPipelineGroups((old) => {
+      const updated: Record<string, any[]> = {
+        interested: [...(old.interested || [])],
+        meeting_requested: [...(old.meeting_requested || [])],
+        in_discussion: [...(old.in_discussion || [])],
+        follow_up: [...(old.follow_up || [])],
+        passed: [...(old.passed || [])],
+      };
+      let foundItem: any = null;
+      for (const key of Object.keys(updated)) {
+        const idx = updated[key].findIndex((x) => x.startup_id === startupId || x.startup?.id === startupId);
+        if (idx !== -1) {
+          foundItem = { ...updated[key][idx], status: toStatus };
+          updated[key].splice(idx, 1);
+          break;
+        }
+      }
+      if (foundItem && updated[toStatus]) {
+        updated[toStatus].push(foundItem);
+      }
+      return updated;
+    });
+
+    try {
+      await apiClient.put(`/pipeline/${startupId}`, { status: toStatus, notes });
+      notify(`Deal status updated to ${toStatus.replace('_', ' ')}`);
+      fetchPipeline();
+    } catch (err: any) {
+      setPipelineGroups(previousGroups);
+      notify(`Failed to update status: ${err.message || 'Invalid transition'}`);
+    }
+  };
+
+  const handleOpenHistoryModal = async (startupId: string, startupName: string) => {
+    setHistoryModalData({ startupName, history: [], loading: true });
+    try {
+      const res = await apiClient.get<any[]>(`/pipeline/${startupId}/history`);
+      setHistoryModalData({ startupName, history: res?.data || [], loading: false });
+    } catch (err: any) {
+      notify(`Failed to load history: ${err.message}`);
+      setHistoryModalData(null);
+    }
+  };
+
+  const fetchWatchlist = useCallback(async () => {
+    try {
+      setWatchlistLoading(true);
+      const res = await apiClient.get<any[]>('/watchlist');
+      if (res && res.data) {
+        setWatchlistItems(res.data);
+      }
+    } catch (err: any) {
+      console.warn('Watchlist fetch notice:', err);
+    } finally {
+      setWatchlistLoading(false);
+    }
+  }, []);
+
+  const handleAddToWatchlist = async (startupId: string, startupName?: string) => {
+    try {
+      await apiClient.post(`/watchlist/${startupId}`);
+      notify(`${startupName || 'Startup'} added to your Watchlist`);
+      fetchWatchlist();
+    } catch (err: any) {
+      notify(`Watchlist notice: ${err.message || 'Already in watchlist'}`);
+    }
+  };
+
+  const handleRemoveFromWatchlist = async (startupId: string) => {
+    const previous = [...watchlistItems];
+    setWatchlistItems((old) => old.filter((w) => w.startup_id !== startupId && w.startup?.id !== startupId));
+    try {
+      await apiClient.delete(`/watchlist/${startupId}`);
+      notify('Removed from Watchlist');
+    } catch (err: any) {
+      setWatchlistItems(previous);
+      notify(`Failed to remove: ${err.message}`);
+    }
+  };
+
+  const handleSaveInvestorNote = async (startupId: string, noteText: string) => {
+    try {
+      await apiClient.put(`/startups/${startupId}/notes`, { note: noteText });
+      notify('Private note saved (visible only to you)');
+      fetchWatchlist();
+      fetchPipeline();
+    } catch (err: any) {
+      notify(`Failed to save note: ${err.message}`);
+    }
+  };
+
+  const handleDeleteInvestorNote = async (startupId: string) => {
+    try {
+      await apiClient.delete(`/startups/${startupId}/notes`);
+      notify('Private note deleted');
+      fetchWatchlist();
+      fetchPipeline();
+    } catch (err: any) {
+      notify(`Failed to delete note: ${err.message}`);
+    }
+  };
+
+  const fetchPitchRequests = useCallback(async () => {
+    try {
+      setPitchRequestsLoading(true);
+      const res = await apiClient.get<any[]>('/pitch-requests');
+      if (res && res.data) {
+        setPitchRequests(res.data);
+      }
+    } catch (err: any) {
+      console.warn('Pitch requests fetch notice:', err);
+    } finally {
+      setPitchRequestsLoading(false);
+    }
+  }, []);
+
+  const handleCreatePitchRequest = async (startupId: string, proposedDate: string, message: string) => {
+    try {
+      await apiClient.post('/pitch-requests', {
+        startup_id: startupId,
+        proposed_date: proposedDate,
+        message,
+      });
+      notify('Pitch meeting request sent to founder!');
+      fetchPitchRequests();
+      fetchPipeline();
+    } catch (err: any) {
+      notify(`Request failed: ${err.message || 'Error'}`);
+      throw err;
+    }
+  };
+
+  const handleRespondPitchRequest = async (
+    requestId: string,
+    action: 'accept' | 'decline' | 'date_proposed',
+    counterDate?: string,
+    message?: string
+  ) => {
+    const prev = [...pitchRequests];
+    setPitchRequests((old) =>
+      old.map((r) =>
+        r.id === requestId
+          ? {
+              ...r,
+              status: action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : 'date_proposed',
+              counter_date: counterDate || r.counter_date,
+              response_message: message || r.response_message,
+            }
+          : r
+      )
+    );
+    try {
+      await apiClient.patch(`/pitch-requests/${requestId}/respond`, {
+        action,
+        counter_date: counterDate,
+        message,
+      });
+      notify(`Meeting request ${action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : 'countered'}`);
+      fetchPitchRequests();
+    } catch (err: any) {
+      setPitchRequests(prev);
+      notify(`Action failed: ${err.message}`);
+    }
+  };
+
+  const handleSendPitchRequestMessage = async (
+    requestId: string,
+    content: string,
+    messageType: 'info_request' | 'info_response' | 'general'
+  ) => {
+    try {
+      await apiClient.post(`/pitch-requests/${requestId}/messages`, {
+        content,
+        message_type: messageType,
+      });
+      notify('Clarification message sent');
+      fetchPitchRequests();
+    } catch (err: any) {
+      notify(`Failed to send message: ${err.message}`);
+    }
+  };
+
+  const fetchConversations = useCallback(async () => {
+    try {
+      setConversationsLoading(true);
+      const res = await apiClient.get<any[]>('/conversations');
+      if (res && res.data) {
+        setConversations(res.data);
+        if (!activeConversationUserId && res.data.length > 0) {
+          const firstPartner = res.data[0].other_user?.id || res.data[0].partner?.id;
+          if (firstPartner) {
+            setActiveConversationUserId(firstPartner);
+          }
+        }
+      }
+      setLastPolledAt(new Date());
+    } catch (err: any) {
+      console.warn('Conversations fetch notice:', err);
+    } finally {
+      setConversationsLoading(false);
+    }
+  }, [activeConversationUserId]);
+
+  const fetchMessages = useCallback(async (partnerId: string) => {
+    try {
+      setMessagesLoading(true);
+      const res = await apiClient.get<any[]>(`/conversations/${partnerId}/messages`);
+      if (res && res.data) {
+        setConversationMessages(res.data);
+      }
+    } catch (err: any) {
+      console.warn('Messages fetch notice:', err);
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, []);
+
+  const handleSendDirectMessage = async (recipientId: string, content: string) => {
+    const tempMsg = {
+      id: `temp-${Date.now()}`,
+      sender_id: auth.user?.id || 'me',
+      recipient_id: recipientId,
+      content,
+      read_at: null,
+      created_at: new Date().toISOString(),
+    };
+    setConversationMessages((old) => [...old, tempMsg]);
+
+    try {
+      await apiClient.post(`/conversations/${recipientId}/messages`, { content });
+      fetchMessages(recipientId);
+      fetchConversations();
+    } catch (err: any) {
+      setConversationMessages((old) => old.filter((m) => m.id !== tempMsg.id));
+      throw err;
+    }
+  };
+
+  // 15-Second Polling Effect for Messages and Engagement updates
+  useEffect(() => {
+    if (role === 'Public') return;
+
+    if (page === 'Pipeline' && role === 'Investor') {
+      fetchPipeline();
+    }
+    if (page === 'Watchlist & Notes' && role === 'Investor') {
+      fetchWatchlist();
+    }
+    if (page === 'Meeting Requests' || page === 'Dashboard') {
+      fetchPitchRequests();
+    }
+    if (page === 'Messages') {
+      fetchConversations();
+      if (activeConversationUserId) {
+        fetchMessages(activeConversationUserId);
+      }
+      const interval = setInterval(() => {
+        fetchConversations();
+        if (activeConversationUserId) {
+          fetchMessages(activeConversationUserId);
+        }
+      }, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [page, role, activeConversationUserId, fetchPipeline, fetchWatchlist, fetchPitchRequests, fetchConversations, fetchMessages]);
 
  // Live verification queue state for Admin
  const [verifications, setVerifications] = useState<any[]>([]);
@@ -1704,7 +2015,83 @@ export default function Home(){
   </div></>;
   if(page==='Users')return <><SectionTitle eyebrow="Administration" title="Users" desc="Review user access and suspend accounts when required."/><div className="rounded-2xl border border-slate-100 bg-white shadow-soft"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400" size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search users..." className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"/></div><Button kind="secondary" onClick={()=>notify('User export prepared in demo.')}>Export users</Button></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-5 py-4">User</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Joined</th><th className="px-5 py-4">Action</th></tr></thead><tbody>{[['Manmeet Singh','Founder','Active','Oct 18'],['Northstar Ventures','Investor','Pending','Oct 25'],['Dr. Kavita Mehra','Mentor','Pending','Oct 24'],['Punjab Innovation Hub','Incubator','Active','Oct 12'],['Riya Kapoor','Founder','Active','Oct 11']].filter(r=>r.join(' ').toLowerCase().includes(search.toLowerCase())).map(r=><tr key={r[0]} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">{r[0]}</td><td className="px-5 py-4"><Pill>{r[1]}</Pill></td><td className="px-5 py-4"><Pill tone={r[2]==='Active'?'green':'amber'}>{r[2]}</Pill></td><td className="px-5 py-4 text-slate-500">{r[3]}</td><td className="px-5 py-4"><Button kind="secondary" onClick={()=>notify(`${r[0]} account status updated in demo.`)}>Manage</Button></td></tr>)}</tbody></table></div></div></>;
   if(page==='Reported Content')return <><SectionTitle eyebrow="Trust & safety" title="Reported content" desc="Review reports and keep startup discovery useful and trustworthy."/><div className="space-y-4">{[['Potentially misleading funding claim','Startup profile · Reported by a user','High'],['Duplicate startup listing','Startup listing · Reported by a founder','Medium'],['Unwanted message','Message thread · Reported by a recipient','Medium']].map((x,i)=><div key={x[0]} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><span className="rounded-xl bg-rose-50 p-3 text-rose-700"><Inbox size={20}/></span><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{x[0]}</h3><Pill tone={x[2]==='High'?'red':'amber'}>{x[2]} priority</Pill></div><p className="mt-1 text-sm text-slate-500">{x[1]}</p></div><div className="flex gap-2"><Button onClick={()=>notify('Report marked resolved in demo.')}>Resolve</Button><Button kind="secondary" onClick={()=>notify('Listing removed in demo.')}>Remove listing</Button></div></div></div>)}</div></>;
-  if(page==='Messages')return <><SectionTitle eyebrow="Communication" title="Messages" desc="Simple conversations between connected users. Real-time chat is future scope."/><div className="grid min-h-[520px] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-soft md:grid-cols-[280px_1fr]"><div className="border-b border-slate-100 p-3 md:border-b-0 md:border-r"><div className="relative"><Search size={15} className="absolute left-3 top-3 text-slate-400"/><input placeholder="Search conversations" className="w-full rounded-xl bg-slate-50 py-2.5 pl-9 pr-3 text-xs outline-none"/></div>{[{name:'Northstar Ventures',sub:'Pilot results would be great',initials:'NV'},{name:'Riya Kapoor',sub:'Thanks for the introduction!',initials:'RK'},{name:'Punjab Innovation Hub',sub:'Application received',initials:'PI'}].map((x,i)=><button key={x.name} onClick={()=>{}} className={cn('mt-2 flex w-full items-center gap-3 rounded-xl p-3 text-left',i===0?'bg-emerald-50':'hover:bg-slate-50')}><Avatar initials={x.initials} size="sm"/><div className="min-w-0"><p className="truncate text-xs font-semibold">{x.name}</p><p className="mt-1 truncate text-[11px] text-slate-500">{x.sub}</p></div></button>)}</div><div className="flex min-h-[400px] flex-col"><div className="flex items-center gap-3 border-b border-slate-100 p-4"><Avatar initials="NV"/><div><p className="text-sm font-semibold">Northstar Ventures</p><p className="mt-1 text-xs text-emerald-700">Connected · Verified</p></div></div><div className="flex-1 space-y-4 bg-slate-50/60 p-5"><div className="max-w-[80%] rounded-2xl rounded-tl-sm border border-slate-100 bg-white p-3 text-sm leading-6">Hi! We would love to learn more about your pilot results.<p className="mt-2 text-[10px] text-slate-400">10:42 AM</p></div>{messages.slice(1).map((m,i)=><div key={i} className="ml-auto max-w-[80%] rounded-2xl rounded-tr-sm bg-forest p-3 text-sm leading-6 text-white">{m.text}<p className="mt-2 text-[10px] text-white/60">{m.time}</p></div>)}</div><form onSubmit={e=>{e.preventDefault();if(messageDraft.trim()){setMessages(old=>[...old,{from:'You',text:messageDraft,time:'Now'}]);setMessageDraft('')}}} className="flex gap-2 border-t border-slate-100 p-3"><input value={messageDraft} onChange={e=>setMessageDraft(e.target.value)} placeholder="Write a message..." className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/><Button><Send size={15}/> Send</Button></form></div></div></>;
+  if (page === 'Messages') {
+    return (
+      <MessagesView
+        conversations={conversations}
+        activeUserId={activeConversationUserId}
+        messages={conversationMessages}
+        loadingConversations={conversationsLoading}
+        loadingMessages={messagesLoading}
+        currentUserId={auth.user?.id || ''}
+        onSelectConversation={(userId) => {
+          setActiveConversationUserId(userId);
+          fetchMessages(userId);
+        }}
+        onSendMessage={handleSendDirectMessage}
+        onRefresh={() => {
+          fetchConversations();
+          if (activeConversationUserId) fetchMessages(activeConversationUserId);
+        }}
+        lastPolledAt={lastPolledAt}
+      />
+    );
+  }
+
+  if (page === 'Pipeline') {
+    return (
+      <PipelineBoard
+        pipelineGroups={pipelineGroups}
+        loading={pipelineLoading}
+        onUpdateStatus={handleUpdatePipelineStatus}
+        onViewHistory={handleOpenHistoryModal}
+        onRequestMeeting={(st) => setPitchModalStartup(st)}
+        onEditNote={(startupId, currentNote, startupName) => {
+          const val = prompt('Edit confidential private note (investor only):', currentNote || '');
+          if (val !== null) {
+            handleSaveInvestorNote(startupId, val);
+          }
+        }}
+        navTo={navTo}
+      />
+    );
+  }
+
+  if (page === 'Watchlist & Notes') {
+    return (
+      <WatchlistSection
+        watchlistItems={watchlistItems}
+        loading={watchlistLoading}
+        onRemove={handleRemoveFromWatchlist}
+        onSaveNote={handleSaveInvestorNote}
+        onDeleteNote={handleDeleteInvestorNote}
+        onRequestMeeting={(st) => setPitchModalStartup(st)}
+        onMoveToPipeline={async (startupId, status) => {
+          await handleUpdatePipelineStatus(startupId, status);
+          fetchWatchlist();
+        }}
+        navTo={navTo}
+      />
+    );
+  }
+
+  if (page === 'Meeting Requests') {
+    return (
+      <MeetingRequestsView
+        role={role}
+        requests={pitchRequests}
+        loading={pitchRequestsLoading}
+        onRespond={handleRespondPitchRequest}
+        onOpenNewMeeting={() => navTo('Discover Startups')}
+        onNavigateToMessages={(partnerId) => {
+          setActiveConversationUserId(partnerId);
+          setPage('Messages');
+        }}
+        onSendTypedMessage={handleSendPitchRequestMessage}
+        onRefresh={fetchPitchRequests}
+      />
+    );
+  }
   
   if(page==='Investment Preferences') {
     const availableSectors = ['AgriTech', 'Climate Tech', 'FinTech', 'HealthTech', 'AI / ML', 'EdTech', 'B2B SaaS', 'Clean Energy', 'DeepTech', 'Consumer Tech', 'E-Commerce', 'Logistics'];
@@ -1982,6 +2369,21 @@ export default function Home(){
  return <div className="min-h-screen bg-canvas">
   {role==='Public'?<><header className="sticky top-0 z-30 border-b border-slate-100 bg-white/90 backdrop-blur"><div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 lg:px-8"><button onClick={()=>navTo('Home')} className="flex items-center gap-2.5"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-forest text-white"><span className="text-lg font-bold">f.</span></span><span className="text-left"><span className="block text-[15px] font-bold tracking-tight text-ink">founders den</span><span className="block text-[10px] tracking-wide text-slate-400">BUILD WHAT'S NEXT</span></span></button><nav className="hidden items-center gap-7 md:flex">{navPublic.map(n=><button key={n} onClick={()=>navTo(n)} className={cn('text-sm transition',page===n?'font-semibold text-forest':'text-slate-500 hover:text-ink')}>{n}</button>)}</nav><div className="flex items-center gap-2"><button onClick={()=>openModal('auth','Welcome back')} className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 sm:block">Log in</button><Button onClick={()=>openModal('auth','Join Founders Den')} className="hidden sm:inline-flex">Sign up <ArrowRight size={14}/></Button><button onClick={()=>setMobileNav(!mobileNav)} className="rounded-xl p-2 text-slate-600 md:hidden"><Menu size={20}/></button></div></div>{mobileNav&&<div className="border-t border-slate-100 bg-white p-3 md:hidden">{navPublic.map(n=><button key={n} onClick={()=>navTo(n)} className="block w-full rounded-xl px-3 py-3 text-left text-sm hover:bg-slate-50">{n}</button>)}<button onClick={()=>openModal('auth','Join Founders Den')} className="block w-full rounded-xl px-3 py-3 text-left text-sm font-semibold text-forest">Sign up</button></div>}</header>{renderPublic()}<footer className="border-t border-slate-100 bg-white"><div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-7 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between lg:px-8"><div className="flex items-center gap-2 font-semibold text-slate-600"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-forest text-white">f.</span> founders den</div><p>Connecting ideas with the people who help them grow.</p><div className="flex gap-4"><button onClick={()=>navTo('How It Works')}>How it works</button><button onClick={()=>openModal('auth','Join Founders Den')}>Join the network</button><span>Prototype · 2026</span></div></div></footer></>:<div className="min-h-screen lg:flex"><aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[270px] flex-col border-r border-slate-100 bg-white transition-transform lg:translate-x-0',mobileNav?'translate-x-0':'-translate-x-full')}><div className="flex h-[76px] items-center justify-between border-b border-slate-100 px-5"><button onClick={()=>enterRole('Public')} className="flex items-center gap-2.5"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-forest text-lg font-bold text-white">f.</span><span className="text-left"><span className="block text-sm font-bold text-ink">founders den</span><span className="block text-[10px] text-slate-400">{config?.label}</span></span></button><button onClick={()=>setMobileNav(false)} className="rounded-lg p-2 text-slate-400 lg:hidden"><X size={18}/></button></div><div className="border-b border-slate-100 p-4"><button onClick={()=>openModal('switchRole','Switch demo role')} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-forest"><UserRound size={17}/></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{role==='Founder'?'Manmeet Singh':role==='Investor'?'Northstar Ventures':role==='Mentor'?'Dr. Kavita Mehra':role==='Incubator'?'Punjab Innovation Hub':'Platform admin'}</span><span className="mt-1 block text-[10px] text-slate-500">{role} workspace</span></span><ChevronDown size={15} className="text-slate-400"/></button></div><nav className="scrollbar-hide flex-1 overflow-y-auto px-3 py-4">{sidebar.map(item=><button key={item.label} onClick={()=>navTo(item.label)} className={cn('mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition',item.active?'bg-emerald-50 text-forest':'text-slate-500 hover:bg-slate-50 hover:text-ink')}><item.icon size={17}/><span className="flex-1">{item.label}</span>{item.label==='Messages'&&<span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] text-forest">2</span>}</button>)}</nav><div className="border-t border-slate-100 p-4"><div className="rounded-xl bg-[#f3f8f3] p-3"><div className="flex items-center gap-2 text-forest"><CircleHelp size={16}/><span className="text-xs font-semibold">Need a hand?</span></div><p className="mt-2 text-[11px] leading-5 text-slate-500">Explore the demo workspace and try the core flows.</p><button onClick={()=>notify('Help center is a demo placeholder.')} className="mt-2 text-xs font-semibold text-forest">Open help center <ArrowRight size={12} className="inline"/></button></div><button onClick={()=>enterRole('Public')} className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"><LogOut size={16}/> Exit workspace</button></div></aside>{mobileNav&&<button onClick={()=>setMobileNav(false)} className="fixed inset-0 z-30 bg-ink/30 lg:hidden"/>}<main className="min-h-screen min-w-0 flex-1 lg:ml-[270px]"><header className="sticky top-0 z-20 flex h-[76px] items-center justify-between border-b border-slate-100 bg-white/90 px-4 backdrop-blur sm:px-7"><div className="flex items-center gap-3"><button onClick={()=>setMobileNav(true)} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 lg:hidden"><Menu size={20}/></button><div><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">{role} workspace</p><p className="mt-1 text-sm font-semibold text-ink">{page}</p></div></div><div className="flex items-center gap-2"><span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 sm:inline-flex">Demo environment</span><div className="relative"><button onClick={()=>setNotificationsOpen(!notificationsOpen)} className="relative rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50"><Bell size={17}/><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-emerald-600"/></button>{notificationsOpen&&<div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-xl"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Notifications</h3><button onClick={()=>setNotificationsOpen(false)}><X size={15}/></button></div>{[['Investor access request','Northstar Ventures requested your pitch deck.','10 min ago'],['Program update','Your application is under review.','Yesterday'],['New match','A new opportunity matches your profile.','2 days ago']].map(x=><div key={x[0]} className="mt-4 border-t border-slate-100 pt-3"><p className="text-xs font-semibold">{x[0]}</p><p className="mt-1 text-xs leading-5 text-slate-500">{x[1]}</p><p className="mt-1 text-[10px] text-slate-400">{x[2]}</p></div>)}</div>}</div><Avatar initials={role==='Founder'?'MS':role==='Investor'?'NV':role==='Mentor'?'KM':role==='Incubator'?'PI':'AD'} size="sm"/></div></header><div className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{renderDashboard()}</div><footer className="border-t border-slate-100 px-5 py-5 text-xs text-slate-400 sm:px-9">Founders Den · Clickable MVP prototype <span className="mx-2">·</span> Demo content only</footer></main></div>}
   {modal&&<Modal modal={modal} close={()=>setModal(null)} openModal={openModal} notify={notify} addStartup={addStartup} newStartup={newStartup} setNewStartup={setNewStartup} enterRole={enterRole} setRole={setRole} setPage={setPage} role={role} startupEditForm={startupEditForm} setStartupEditForm={setStartupEditForm} handleSaveStartupProfile={handleSaveStartupProfile} handleUploadDeckFile={handleUploadDeckFile} isUploading={isUploading} uploadProgress={uploadProgress} uploadVisibility={uploadVisibility} setUploadVisibility={setUploadVisibility} teamMemberForm={teamMemberForm} setTeamMemberForm={setTeamMemberForm} handleAddTeamMember={handleAddTeamMember} activeStartupDetail={activeStartupDetail} detailLoading={detailLoading} accessRequestedIds={accessRequestedIds} setAccessRequestedIds={setAccessRequestedIds} meetingRequestedIds={meetingRequestedIds} setMeetingRequestedIds={setMeetingRequestedIds} />}
+  {pitchModalStartup && (
+    <PitchRequestModal
+      startup={pitchModalStartup}
+      onClose={() => setPitchModalStartup(null)}
+      onSubmit={handleCreatePitchRequest}
+    />
+  )}
+  {historyModalData && (
+    <PipelineHistoryModal
+      startupName={historyModalData.startupName}
+      history={historyModalData.history}
+      loading={historyModalData.loading}
+      onClose={() => setHistoryModalData(null)}
+    />
+  )}
   {toast&&<div className="fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-medium text-white shadow-xl"><CheckCircle2 size={17} className="text-emerald-300"/>{toast}</div>}
  </div>;
 }
