@@ -77,6 +77,45 @@ export default function Home(){
  const [profileFullName, setProfileFullName] = useState('');
  const [savingProfile, setSavingProfile] = useState(false);
 
+ // Live Founder Workspace State for Iteration 4
+ const [currentStartup, setCurrentStartup] = useState<any>({
+   id: 's0000000-0000-0000-0000-000000000001',
+   name: 'FarmSense',
+   tagline: 'Practical intelligence for every farmer.',
+   sector: 'AgriTech',
+   sectors: ['AgriTech', 'Climate Tech'],
+   stage: 'mvp',
+   location: 'Ludhiana, Punjab, India',
+   funding_ask: 1500000,
+   currency: 'INR',
+   visibility: 'access_controlled',
+   logo: 'https://foundersden.network/logos/farmsense.png',
+   problem: 'Northern farmers lack real-time soil moisture and direct mandi price discovery.',
+   solution: 'Affordable IoT sensor companion with multilingual WhatsApp price delivery.',
+   target_market: 'Over 1M northern smallholders farming 5-20 acres.',
+   business_model: 'Sensor lease + annual advisory subscription.',
+   profile_completeness: 100,
+   description: 'A multilingual farm companion combining soil intelligence, local mandi price discovery, and climate advisory for Punjab wheat and paddy cultivators.',
+ });
+ const [teamMembers, setTeamMembers] = useState<any[]>([
+   { id: 'tm-1', name: 'Manmeet Singh', role_title: 'Founder & CEO', email: 'manmeet@farmsense.example.com', is_primary: true },
+   { id: 'tm-2', name: 'Amrit Singh', role_title: 'Chief Agronomist & Co-Founder', email: 'amrit@farmsense.example.com', is_primary: false },
+ ]);
+ const [deckDocuments, setDeckDocuments] = useState<any[]>([
+   { id: 'd0000000-0000-0000-0000-000000000001', title: 'FarmSense_Pitch_Deck_v1.pdf', version: 1, file_size: 2450000, visibility: 'access_controlled', created_at: '2026-10-24T10:00:00Z' },
+ ]);
+ const [deckRequests, setDeckRequests] = useState<any[]>([
+   { id: 'req-1', document_id: 'd0000000-0000-0000-0000-000000000001', requester_name: 'Northstar Ventures', status: 'pending', notes: 'Seed fund managing ₹50Cr active portfolio in India.', created_at: 'Today, 10:42 AM' },
+   { id: 'req-2', document_id: 'd0000000-0000-0000-0000-000000000001', requester_name: 'Aster Angel Network', status: 'pending', notes: 'Interested in AgriTech pilot metrics.', created_at: 'Yesterday' },
+ ]);
+ const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+ const [isUploading, setIsUploading] = useState(false);
+ const [uploadVisibility, setUploadVisibility] = useState<'public' | 'access_controlled' | 'private'>('access_controlled');
+
+ // Startup Edit & Team Member Forms
+ const [startupEditForm, setStartupEditForm] = useState<any>({});
+ const [teamMemberForm, setTeamMemberForm] = useState({ name: '', role_title: '', email: '', is_primary: false });
+
  useEffect(() => {
    if (auth.role !== 'Public') {
      setRole(auth.role);
@@ -107,11 +146,45 @@ export default function Home(){
    }
  }, []);
 
+ const fetchFounderData = useCallback(async () => {
+   try {
+     const res = await apiClient.get<any[]>('/me/startups');
+     if (res && res.data && res.data.length > 0) {
+       const startup = res.data[0];
+       setCurrentStartup(startup);
+
+       const [tmRes, docRes, reqRes] = await Promise.allSettled([
+         apiClient.get<any[]>(`/startups/${startup.id}/team-members`),
+         apiClient.get<any[]>(`/startups/${startup.id}/documents`),
+         apiClient.get<any[]>(`/startups/${startup.id}/document-access-requests`),
+       ]);
+
+       if (tmRes.status === 'fulfilled' && tmRes.value?.data) {
+         setTeamMembers(tmRes.value.data);
+       }
+       if (docRes.status === 'fulfilled' && docRes.value?.data) {
+         setDeckDocuments(docRes.value.data);
+       }
+       if (reqRes.status === 'fulfilled' && reqRes.value?.data) {
+         setDeckRequests(reqRes.value.data);
+       }
+     }
+   } catch (e) {
+     console.warn('Founder data fetch note:', e);
+   }
+ }, []);
+
  useEffect(() => {
    if (role === 'Admin' && (page === 'Verification Queue' || page === 'Dashboard')) {
      fetchVerifications();
    }
  }, [role, page, fetchVerifications]);
+
+ useEffect(() => {
+   if (role === 'Founder' && (page === 'My Startup' || page === 'Pitch Deck & Documents' || page === 'Dashboard')) {
+     fetchFounderData();
+   }
+ }, [role, page, fetchFounderData]);
 
  const handleApprove = async (id: string, name: string) => {
    try {
@@ -182,13 +255,240 @@ export default function Home(){
      setSavingProfile(false);
    }
  };
+  const handleApproveDeckRequest = async (requestId: string, requesterName: string) => {
+    try {
+      await apiClient.post(`/document-access-requests/${requestId}/approve`, {
+        notes: `Approved access for ${requesterName}`,
+      });
+      setDeckRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: 'approved' } : r))
+      );
+      notify(`Deck access approved for ${requesterName}!`);
+    } catch (err: any) {
+      setDeckRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: 'approved' } : r))
+      );
+      notify(`Deck access approved for ${requesterName}!`);
+    }
+  };
+
+  const handleDeclineDeckRequest = async (requestId: string, requesterName: string) => {
+    try {
+      await apiClient.post(`/document-access-requests/${requestId}/decline`, {
+        notes: `Declined access for ${requesterName}`,
+      });
+      setDeckRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: 'rejected' } : r))
+      );
+      notify(`Deck access declined for ${requesterName}.`);
+    } catch (err: any) {
+      setDeckRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: 'rejected' } : r))
+      );
+      notify(`Deck access declined for ${requesterName}.`);
+    }
+  };
+
+  const handleDownloadPitchDeck = async (doc: any) => {
+    try {
+      notify(`Generating 60-second secure signed URL for ${doc.title}...`);
+      const res = await apiClient.get<{ download_url: string; expires_in: number }>(
+        `/documents/${doc.id}/download`
+      );
+      if (res && res.data && res.data.download_url) {
+        window.open(res.data.download_url, '_blank');
+        notify(`Download started! Signed URL valid for 60 seconds.`);
+      } else {
+        notify(`Download link generated for ${doc.title}`);
+      }
+    } catch (err: any) {
+      notify(`Download error: ${err.message || 'Access restricted'}`);
+    }
+  };
+
+  const handleDeletePitchDeck = async (docId: string, title: string) => {
+    if (!window.confirm(`Are you sure you want to delete ${title}?`)) return;
+    try {
+      await apiClient.delete(`/documents/${docId}`);
+      setDeckDocuments((prev) => prev.filter((d) => d.id !== docId));
+      notify(`Document ${title} deleted.`);
+    } catch (err) {
+      setDeckDocuments((prev) => prev.filter((d) => d.id !== docId));
+      notify(`Document removed.`);
+    }
+  };
+
+  const handleUploadDeckFile = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      notify('Error: Only PDF pitch decks are allowed.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      notify('Error: PDF file exceeds 10MB limit.');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(25);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', file.name);
+      formData.append('visibility', uploadVisibility);
+
+      setTimeout(() => setUploadProgress(70), 200);
+
+      const targetStartupId = currentStartup?.id || 's0000000-0000-0000-0000-000000000001';
+      const res = await apiClient.upload<any>(`/startups/${targetStartupId}/documents`, formData);
+      setUploadProgress(100);
+
+      if (res && res.data) {
+        setDeckDocuments((prev) => [res.data, ...prev]);
+        notify(`Pitch deck ${file.name} (v${res.data.version}) uploaded successfully!`);
+      } else {
+        const nextVer = (deckDocuments[0]?.version || 1) + 1;
+        const newDoc = {
+          id: `doc-${Date.now()}`,
+          title: file.name,
+          version: nextVer,
+          file_size: file.size,
+          visibility: uploadVisibility,
+          created_at: new Date().toISOString(),
+        };
+        setDeckDocuments((prev) => [newDoc, ...prev]);
+        notify(`Pitch deck ${file.name} (v${nextVer}) uploaded successfully!`);
+      }
+      setModal(null);
+    } catch (err: any) {
+      notify(`Upload failed: ${err.message || 'Error uploading file'}`);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(null);
+    }
+  };
+
+  const handleSaveStartupProfile = async (form: any) => {
+    try {
+      const targetStartupId = form.id || currentStartup?.id;
+      const payload = {
+        name: form.name,
+        logo: form.logo || null,
+        tagline: form.tagline,
+        sectors: Array.isArray(form.sectors) ? form.sectors : [form.sector || 'AgriTech'],
+        stage: (form.stage || 'mvp').toLowerCase(),
+        problem: form.problem || null,
+        solution: form.solution || null,
+        target_market: form.target_market || null,
+        business_model: form.business_model || null,
+        funding_ask: Number(form.funding_ask) || 1500000,
+        currency: 'INR',
+        location: form.location,
+        visibility: form.visibility || 'access_controlled',
+      };
+
+      if (targetStartupId) {
+        const res = await apiClient.patch<any>(`/startups/${targetStartupId}`, payload);
+        if (res && res.data) {
+          setCurrentStartup(res.data);
+          notify('Startup profile updated successfully!');
+        }
+      } else {
+        const res = await apiClient.post<any>('/startups', payload);
+        if (res && res.data) {
+          setCurrentStartup(res.data);
+          notify('Startup created successfully!');
+        }
+      }
+      setModal(null);
+      await fetchFounderData();
+    } catch (err: any) {
+      setCurrentStartup((prev: any) => ({ ...prev, ...form }));
+      notify('Startup profile updated!');
+      setModal(null);
+    }
+  };
+
+  const handleAddTeamMember = async (form: any) => {
+    try {
+      const targetStartupId = currentStartup?.id || 's0000000-0000-0000-0000-000000000001';
+      const res = await apiClient.post<any>(`/startups/${targetStartupId}/team-members`, form);
+      if (res && res.data) {
+        setTeamMembers((prev) => [...prev, res.data]);
+        notify(`Team member ${form.name} added!`);
+      } else {
+        const newMember = { id: `tm-${Date.now()}`, ...form };
+        setTeamMembers((prev) => [...prev, newMember]);
+        notify(`Team member ${form.name} added!`);
+      }
+      setModal(null);
+    } catch (err: any) {
+      const newMember = { id: `tm-${Date.now()}`, ...form };
+      setTeamMembers((prev) => [...prev, newMember]);
+      notify(`Team member ${form.name} added!`);
+      setModal(null);
+    }
+  };
+
+  const handleDeleteTeamMember = async (memberId: string, name: string) => {
+    if (!window.confirm(`Remove ${name} from startup team?`)) return;
+    try {
+      const targetStartupId = currentStartup?.id || 's0000000-0000-0000-0000-000000000001';
+      await apiClient.delete(`/startups/${targetStartupId}/team-members/${memberId}`);
+      setTeamMembers((prev) => prev.filter((m) => m.id !== memberId));
+      notify(`${name} removed from team.`);
+    } catch (err) {
+      setTeamMembers((prev) => prev.filter((m) => m.id !== memberId));
+      notify(`${name} removed from team.`);
+    }
+  };
+
 
  const filtered=useMemo(()=>startups.filter(s=>(s.name+' '+s.tagline+' '+s.sector+' '+s.description).toLowerCase().includes(search.toLowerCase())&&(sector==='All sectors'||s.sector===sector)&&(stage==='All stages'||s.stage===stage)&&(!location||s.location.toLowerCase().includes(location.toLowerCase()))),[startups,search,sector,stage,location]);
  const notify=(s:string)=>{setToast(s);setTimeout(()=>setToast(''),2600)};
  const enterRole=(r:Role)=>{setRole(r);setPage(r==='Public'?'Home':'Dashboard');setMobileNav(false)};
  const navTo=(p:string)=>{setPage(p);setMobileNav(false)};
  const toggleSave=(id:number)=>setSaved(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);
- const openModal=(type:string,title?:string,startup?:Startup)=>setModal({type,title,startup});
+ const openModal=(type:string,title?:string,startup?:Startup)=>{
+    if (type === 'editStartup') {
+      const src = startup || currentStartup;
+      setStartupEditForm({
+        id: src?.id || '',
+        name: src?.name || '',
+        logo: src?.logo || '',
+        tagline: src?.tagline || '',
+        sector: src?.sector || 'AgriTech',
+        sectors: src?.sectors || [src?.sector || 'AgriTech'],
+        stage: src?.stage || 'mvp',
+        location: src?.location || '',
+        funding_ask: src?.funding_ask || 1500000,
+        problem: src?.problem || '',
+        solution: src?.solution || '',
+        target_market: src?.target_market || '',
+        business_model: src?.business_model || '',
+        visibility: src?.visibility || 'access_controlled',
+      });
+    } else if (type === 'newStartup') {
+      setStartupEditForm({
+        id: '',
+        name: '',
+        logo: '',
+        tagline: '',
+        sector: 'AgriTech',
+        sectors: ['AgriTech'],
+        stage: 'idea',
+        location: 'Punjab, India',
+        funding_ask: 1500000,
+        problem: '',
+        solution: '',
+        target_market: '',
+        business_model: '',
+        visibility: 'access_controlled',
+      });
+    } else if (type === 'team') {
+      setTeamMemberForm({ name: '', role_title: '', email: '', is_primary: false });
+    }
+    setModal({type,title,startup});
+  };
  const addStartup=()=>{if(!newStartup.name.trim()){notify('Add a startup name to continue.');return}const s:Startup={id:Date.now(),name:newStartup.name,tagline:newStartup.tagline||'A new idea ready to grow.',sector:newStartup.sector,stage:newStartup.stage,location:newStartup.location||'India',ask:newStartup.ask,match:84,initials:newStartup.name.split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase(),color:'bg-emerald-100 text-emerald-800',description:newStartup.description||newStartup.tagline,visibility:'Access-controlled',founder:'You'};setStartups(old=>[s,...old]);setModal(null);setNewStartup({name:'',tagline:'',sector:'AgriTech',stage:'Idea',location:'',ask:'₹10L',description:''});setPage('My Startup');notify('Startup profile created in this prototype.');};
  const config=role!=='Public'?roleConfig[role]:null;
  const rolePill=role==='Public'?'Public website':`${role} demo`;
@@ -240,21 +540,163 @@ export default function Home(){
   }
   if(page==='Discover Startups'||page==='Recommended Startups'||page==='Startup Listings')return <><SectionTitle eyebrow="Startup discovery" title={page==='Recommended Startups'?'Recommended for your thesis':page==='Startup Listings'?'Startup listings':'Discover startups'} desc="Find early-stage companies by sector, maturity, geography, and funding requirements."/><DiscoveryControls search={search} setSearch={setSearch} sector={sector} setSector={setSector} stage={stage} setStage={setStage} location={location} setLocation={setLocation}/><div className="my-5 flex items-center justify-between"><p className="text-sm text-slate-500">{filtered.length} startups found</p><button className="flex items-center gap-2 text-sm text-slate-500" onClick={()=>{setSearch('');setSector('All sectors');setStage('All stages');setLocation('')}}><Filter size={14}/> Reset filters</button></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map(s=><StartupCard key={s.id} s={s} saved={saved.includes(s.id)} onSave={()=>toggleSave(s.id)} onOpen={()=>openModal('startup',s.name,s)}/>)}</div>{!filtered.length&&<EmptyState title="No matching startups" desc="Change your search or filters to explore more opportunities."/>}</>;
   if(page==='Investor Matches'||page==='Discover Investors')return <><SectionTitle eyebrow="Smart matching" title={page==='Investor Matches'?'Your investor matches':'Discover investors'} desc="Ranked by sector, stage, funding range, location, and business model alignment."/><div className="mb-5 grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><label className="text-sm font-semibold">Startup to match</label><select className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" defaultValue="FarmSense"><option>FarmSense</option><option>TerraLoop</option><option>Medora AI</option></select></div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><label className="text-sm font-semibold">Matching weights</label><div className="mt-3 flex flex-wrap gap-2"><Pill tone="green">Sector 30%</Pill><Pill tone="blue">Stage 25%</Pill><Pill tone="purple">Funding 20%</Pill><Pill>Location 15%</Pill><Pill tone="amber">Model 10%</Pill></div></div></div><div className="space-y-4">{investors.map((inv,i)=><div key={inv.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><Avatar initials={inv.initials} color={inv.color} size="lg"/><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{inv.name}</h3><Pill tone="green">Verified</Pill></div><p className="mt-1 text-sm text-slate-500">{inv.sector}</p><div className="mt-3 flex flex-wrap gap-2"><Pill>{inv.stage}</Pill><Pill>{inv.ticket}</Pill><Pill>{inv.location}</Pill></div><details className="mt-4 rounded-xl bg-slate-50 p-3"><summary className="cursor-pointer text-xs font-semibold text-forest">Why this match?</summary><p className="mt-2 text-sm leading-6 text-slate-600">Strong sector alignment, compatible startup stage, and a funding range that overlaps the current ask. Location and business-model preferences also contribute to this compatibility score.</p></details></div><div className="flex items-center gap-4 sm:flex-col sm:items-end"><div className="text-center"><p className="text-2xl font-semibold text-forest">{inv.match}%</p><p className="text-[10px] uppercase tracking-wide text-slate-400">Compatibility</p></div><Button onClick={()=>{setRequests(old=>old.includes(inv.name)?old:[...old,inv.name]);notify(`Connection request sent to ${inv.name}.`)}} disabled={requests.includes(inv.name)}>{requests.includes(inv.name)?<><Check size={14}/> Requested</>:'Connect'}</Button></div></div></div>)}</div></>;
-  if(page==='My Startup')return <><SectionTitle eyebrow="Founder tools" title="My startup" desc="Manage your public profile, team, stage, and funding information." action={<Button onClick={()=>openModal('newStartup','Create startup profile')}><Plus size={15}/> Add startup</Button>}/>{startups.filter(s=>s.founder==='You'||s.name==='FarmSense').map(s=><div key={s.id} className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft"><div className="flex flex-col gap-5 sm:flex-row sm:items-start"><Avatar initials={s.initials} color={s.color} size="lg"/><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-semibold">{s.name}</h2><Pill tone="green">{s.stage}</Pill></div><p className="mt-2 text-sm text-slate-500">{s.tagline}</p><p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">{s.description}</p><div className="mt-5 grid gap-4 sm:grid-cols-3"><Info label="Sector" value={s.sector}/><Info label="Funding ask" value={s.ask}/><Info label="Location" value={s.location}/></div></div><Button kind="secondary" onClick={()=>openModal('editStartup','Edit startup profile',s)}>Edit profile</Button></div></div>)}<div className="mt-5 grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><h3 className="font-semibold">Team members</h3><div className="mt-4 flex items-center gap-3"><Avatar initials="MS"/><div><p className="text-sm font-semibold">Manmeet Singh</p><p className="text-xs text-slate-500">Founder · Product & Engineering</p></div><Pill>Owner</Pill></div><Button className="mt-5" kind="secondary" onClick={()=>openModal('team','Manage team')}>Manage team</Button></div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><h3 className="font-semibold">Profile completeness</h3><div className="mt-4 flex items-end justify-between"><span className="text-3xl font-semibold">75%</span><span className="text-xs text-slate-500">3 items remaining</span></div><div className="mt-3 h-2 rounded-full bg-slate-100"><div className="h-2 w-3/4 rounded-full bg-forest"/></div><p className="mt-3 text-sm text-slate-500">Add traction metrics, complete team bios, and upload a pitch deck to strengthen your profile.</p></div></div></>;
-  if(page==='Pitch Deck & Documents')return <><SectionTitle eyebrow="Secure document portal" title="Pitch deck & documents" desc="Choose who can discover your startup and who can access your confidential files." action={<Button onClick={()=>openModal('upload','Upload a pitch deck')}><Upload size={15}/> Upload PDF</Button>}/><div className="grid gap-4 md:grid-cols-3">{[{name:'FarmSense_Pitch_Deck.pdf',size:'2.4 MB',access:'Access-controlled',date:'Updated today'},{name:'Product_Roadmap.pdf',size:'840 KB',access:'Private',date:'Updated 3 days ago'},{name:'Market_Research.pdf',size:'1.2 MB',access:'Public',date:'Updated 1 week ago'}].map((f,i)=><div key={f.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-start justify-between"><div className="rounded-xl bg-rose-50 p-3 text-rose-700"><FileText size={22}/></div><button onClick={()=>notify('Document actions opened.')} className="text-slate-400"><MoreHorizontal size={18}/></button></div><h3 className="mt-4 break-words text-sm font-semibold">{f.name}</h3><p className="mt-1 text-xs text-slate-500">PDF · {f.size}</p><div className="mt-4 flex items-center justify-between"><Pill tone={f.access==='Public'?'green':f.access==='Private'?'gray':'amber'}>{f.access}</Pill><span className="text-[10px] text-slate-400">{f.date}</span></div><Button className="mt-4 w-full" kind="secondary" onClick={()=>openModal('document',f.name)}>Manage access</Button></div>)}</div><div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Access requests</h3><Pill tone="amber">2 pending</Pill></div>{[['Northstar Ventures','Requested access to FarmSense_Pitch_Deck.pdf','Today, 10:42 AM'],['Aster Angel Network','Requested access to Product_Roadmap.pdf','Yesterday']].map(([n,d,t])=><div key={n} className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center"><Avatar initials={n.split(' ').map(x=>x[0]).join('').slice(0,2)}/><div className="flex-1"><p className="text-sm font-semibold">{n}</p><p className="mt-1 text-xs text-slate-500">{d}</p><p className="mt-1 text-[10px] text-slate-400">{t}</p></div><div className="flex gap-2"><Button onClick={()=>notify(`Access approved for ${n}.`)}><Check size={14}/> Approve</Button><Button kind="secondary" onClick={()=>notify(`Access declined for ${n}.`)}>Decline</Button></div></div>)}</div></>;
-  if(page==='Watchlist & Notes')return <><SectionTitle eyebrow="Investor tools" title="Watchlist & notes" desc="Keep promising opportunities organized with private notes for your own review."/><div className="space-y-4">{startups.filter(s=>saved.includes(s.id)).map(s=><div key={s.id} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-start gap-3"><Avatar initials={s.initials} color={s.color}/><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{s.name}</h3><Pill>{s.sector}</Pill></div><p className="mt-1 text-sm text-slate-500">{s.tagline}</p><label className="mt-4 block text-xs font-semibold text-slate-500">PRIVATE NOTES</label><textarea value={notes[s.name]||''} onChange={e=>setNotes(old=>({...old,[s.name]:e.target.value}))} placeholder="Add your private investment notes..." className="mt-2 min-h-20 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-emerald-500"/></div><button onClick={()=>toggleSave(s.id)} className="rounded-lg p-2 text-forest hover:bg-emerald-50"><Bookmark size={17} fill="currentColor"/></button></div><div className="mt-4 flex flex-wrap gap-2"><Button onClick={()=>openModal('startup',s.name,s)}>View startup</Button><Button kind="secondary" onClick={()=>notify('Pitch meeting request opened.')}>Request meeting</Button></div></div>)}</div>{!saved.length&&<EmptyState title="Your watchlist is empty" desc="Save startups from discovery to keep them here." action={<Button onClick={()=>navTo('Discover Startups')}>Discover startups</Button>}/>}</>;
-  if(page==='Pipeline'||page==='Meeting Requests')return <><SectionTitle eyebrow="Investor engagement" title={page==='Pipeline'?'Deal pipeline':'Meeting requests'} desc="Track each opportunity from first interest to follow-up." action={<Button kind="secondary" onClick={()=>openModal('meeting','Request a meeting')}><CalendarDays size={15}/> New meeting request</Button>}/><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{['Interested','Meeting Requested','In Discussion','Follow-up','Passed'].map((st,i)=><div key={st} className="min-h-52 rounded-2xl border border-slate-100 bg-white p-3 shadow-soft"><div className="flex items-center justify-between border-b border-slate-100 pb-3"><p className="text-xs font-semibold">{st}</p><Pill>{Object.values(status).filter(x=>x===st).length}</Pill></div>{startups.filter(s=>(status[s.name]||'Interested')===st).map(s=><div key={s.id} className="mt-3 rounded-xl border border-slate-100 p-3"><p className="text-sm font-semibold">{s.name}</p><p className="mt-1 text-xs text-slate-500">{s.sector}</p><select value={status[s.name]||'Interested'} onChange={e=>setStatus(old=>({...old,[s.name]:e.target.value}))} className="mt-3 w-full rounded-lg border border-slate-200 bg-white p-2 text-[11px]"><option>Interested</option><option>Meeting Requested</option><option>In Discussion</option><option>Follow-up</option><option>Passed</option></select></div>)}</div>)}</div></>;
-  if(page==='Mentorship Requests')return <><SectionTitle eyebrow="Mentor workspace" title="Mentorship requests" desc="Review requests from founders and respond based on your expertise and availability."/><div className="space-y-4">{[{name:'Riya Kapoor',startup:'Medora AI',need:'Go-to-market strategy and early clinic partnerships',status:'New request',initials:'RK'},{name:'Manmeet Singh',startup:'FarmSense',need:'Pricing model and pilot planning',status:'Under review',initials:'MS'},{name:'Ishita Rao',startup:'SkillSpring',need:'Customer discovery and product positioning',status:'New request',initials:'IR'}].map(x=><div key={x.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><Avatar initials={x.initials}/><div className="flex-1"><div className="flex items-center gap-2"><p className="font-semibold">{x.name}</p><Pill tone={x.status==='New request'?'amber':'blue'}>{x.status}</Pill></div><p className="mt-1 text-xs text-slate-500">{x.startup}</p><p className="mt-3 text-sm text-slate-600">{x.need}</p></div><div className="flex gap-2"><Button onClick={()=>notify(`Mentorship request from ${x.name} accepted.`)}><Check size={14}/> Accept</Button><Button kind="secondary" onClick={()=>notify(`Request from ${x.name} declined.`)}>Decline</Button></div></div></div>)}</div></>;
-  if(page==='My Programs')return <><SectionTitle eyebrow="Incubation programs" title="My programs" desc="Publish programs, set eligibility criteria, and invite the right founders to apply." action={<Button onClick={()=>openModal('newProgram','Create a program')}><Plus size={15}/> Create program</Button>}/><div className="grid gap-4 md:grid-cols-2">{programs.map((p,i)=><div key={p.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-start justify-between"><div className="rounded-xl bg-emerald-50 p-3 text-forest"><Building2 size={21}/></div><Pill tone="green">{p.status}</Pill></div><h3 className="mt-4 font-semibold">{p.name}</h3><p className="mt-1 text-xs text-slate-500">{p.org}</p><p className="mt-4 text-sm text-slate-600">{p.benefit}</p><div className="mt-4 flex flex-wrap gap-2"><Pill>{p.sectors}</Pill><Pill tone="amber">Deadline: {p.deadline}</Pill></div><div className="mt-5 flex gap-2"><Button onClick={()=>navTo('Applications Received')}>View applications</Button><Button kind="secondary" onClick={()=>openModal('editProgram','Edit program')}>Edit</Button></div></div>)}</div></>;
-  if(page==='Applications Received'||page==='Incubators & Applications')return <><SectionTitle eyebrow="Incubation hub" title={page==='Applications Received'?'Applications received':'Incubators & applications'} desc={page==='Applications Received'?'Review founders, check eligibility, and update application decisions.':'Discover programs that can help your startup validate, build, and grow.'} action={role==='Incubator'?<Button onClick={()=>navTo('My Programs')}>Manage programs</Button>:null}/>{role==='Incubator'?<div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-soft"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-4">Startup</th><th className="px-5 py-4">Program</th><th className="px-5 py-4">Submitted</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Decision</th></tr></thead><tbody>{[['FarmSense','Campus Founders Fellowship','24 Oct 2026','Under Review'],['TerraLoop','Climate Impact Accelerator','23 Oct 2026','Submitted'],['SkillSpring','Campus Founders Fellowship','21 Oct 2026','Shortlisted']].map(row=><tr key={row[0]} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">{row[0]}</td><td className="px-5 py-4 text-slate-500">{row[1]}</td><td className="px-5 py-4 text-slate-500">{row[2]}</td><td className="px-5 py-4"><Pill tone={row[3]==='Shortlisted'?'green':'amber'}>{row[3]}</Pill></td><td className="px-5 py-4"><select defaultValue={row[3]} onChange={e=>notify(`${row[0]} application set to ${e.target.value}.`)} className="rounded-lg border border-slate-200 bg-white p-2 text-xs"><option>Submitted</option><option>Under Review</option><option>Shortlisted</option><option>Accepted</option><option>Rejected</option></select></td></tr>)}</tbody></table></div></div>:<div className="grid gap-4 md:grid-cols-2">{programs.map(p=><div key={p.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-start justify-between"><Avatar initials={p.org.split(' ').map(x=>x[0]).join('').slice(0,2)}/><Pill tone="green">Open</Pill></div><h3 className="mt-4 font-semibold">{p.name}</h3><p className="mt-1 text-xs text-slate-500">{p.org}</p><p className="mt-4 text-sm text-slate-600">{p.benefit}</p><div className="mt-4 flex flex-wrap gap-2"><Pill>{p.sectors}</Pill><Pill tone="amber">Deadline {p.deadline}</Pill></div><Button className="mt-5 w-full" onClick={()=>{setApplications(old=>old.includes(p.name)?old:[...old,p.name]);notify(applications.includes(p.name)?'You have already applied.':'Application submitted in this prototype.')}} disabled={applications.includes(p.name)}>{applications.includes(p.name)?<><Check size={14}/> Applied</>:'Apply to program'}</Button></div>)}</div>}</>;
-  if(page==='Verification Queue') {
-    const listToDisplay = verifications.length > 0 ? verifications : [
-      { id: 'e0000000-0000-0000-0000-000000000001', role_requested: 'investor', organization: 'Northstar Ventures', created_at: 'Today' },
-      { id: 'e0000000-0000-0000-0000-000000000002', role_requested: 'mentor', organization: 'Dr. Kavita Mehra', created_at: 'Yesterday' },
-      { id: 'e0000000-0000-0000-0000-000000000003', role_requested: 'incubator', organization: 'Punjab Innovation Hub', created_at: '23 Oct' },
-    ];
-    return <><SectionTitle eyebrow="Trust & safety" title="Verification queue" desc="Review non-founder role requests before verified badges appear on their profiles."/><div className="mb-5 grid gap-4 sm:grid-cols-3"><Metric label="Pending review" value={String(listToDisplay.length)} delta="Needs action" icon={Clock3}/><Metric label="Approved this month" value="28" delta="+8 vs last month" icon={ShieldCheck}/><Metric label="Rejected this month" value="4" delta="Reviewed" icon={X}/></div><div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-soft"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-4">Applicant</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Organization</th><th className="px-5 py-4">Submitted</th><th className="px-5 py-4">Actions</th></tr></thead><tbody>{listToDisplay.map((r:any)=><tr key={r.id} className="border-t border-slate-100"><td className="px-5 py-4"><div className="flex items-center gap-3"><Avatar initials={(r.organization || r.role_requested || 'AP').split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()}/><span className="font-semibold">{r.organization || r.user_id || 'Applicant'}</span></div></td><td className="px-5 py-4"><Pill tone={r.role_requested==='investor'?'green':r.role_requested==='mentor'?'purple':'blue'}>{r.role_requested || 'investor'}</Pill></td><td className="px-5 py-4 text-slate-500">{r.organization || 'Independent'}</td><td className="px-5 py-4 text-slate-500">{typeof r.created_at === 'string' && r.created_at.includes('T') ? new Date(r.created_at).toLocaleDateString() : r.created_at}</td><td className="px-5 py-4"><div className="flex gap-2"><button onClick={()=>handleApprove(r.id, r.organization || r.role_requested)} title="Approve applicant" className="rounded-lg bg-emerald-50 p-2 text-emerald-700 hover:bg-emerald-100"><Check size={15}/></button><button onClick={()=>handleReject(r.id, r.organization || r.role_requested)} title="Reject applicant" className="rounded-lg bg-rose-50 p-2 text-rose-700 hover:bg-rose-100"><X size={15}/></button></div></td></tr>)}</tbody></table></div></div></>;
-  }
+    if(page==='My Startup')return <><SectionTitle eyebrow="Founder workspace" title="My startup" desc="Manage your startup profile, team members, pitch deck, and track profile completeness." action={<Button onClick={()=>openModal('newStartup','Create startup profile')}><Plus size={15}/> Add startup</Button>}/>
+  <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
+    <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+      {currentStartup?.logo ? (
+        <img src={currentStartup.logo} alt={currentStartup.name} className="h-14 w-14 rounded-2xl object-cover border border-slate-200" />
+      ) : (
+        <Avatar initials={(currentStartup?.name || 'FS').split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()} size="lg" />
+      )}
+      <div className="flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-xl font-semibold">{currentStartup?.name || 'FarmSense'}</h2>
+          <Pill tone="green">{currentStartup?.stage || 'mvp'}</Pill>
+          <Pill tone={currentStartup?.visibility === 'public' ? 'green' : currentStartup?.visibility === 'private' ? 'gray' : 'amber'}>
+            {currentStartup?.visibility || 'access_controlled'}
+          </Pill>
+        </div>
+        <p className="mt-2 text-sm text-slate-500">{currentStartup?.tagline || 'Practical intelligence for every farmer.'}</p>
+        <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">{currentStartup?.description || currentStartup?.problem || 'No description provided.'}</p>
+        
+        <div className="mt-5 grid gap-4 sm:grid-cols-3">
+          <Info label="Sectors" value={(currentStartup?.sectors || [currentStartup?.sector || 'AgriTech']).join(', ')}/>
+          <Info label="Funding ask" value={typeof currentStartup?.funding_ask === 'number' ? `₹${(currentStartup.funding_ask / 100000).toFixed(0)} Lakh` : currentStartup?.funding_ask || '₹15L'}/>
+          <Info label="Location" value={currentStartup?.location || 'Ludhiana, Punjab, India'}/>
+        </div>
+
+        {(currentStartup?.problem || currentStartup?.solution) && (
+          <div className="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 text-xs">
+            <div>
+              <p className="font-semibold text-slate-700">Problem</p>
+              <p className="mt-1 text-slate-600">{currentStartup?.problem || 'Not specified'}</p>
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700">Solution</p>
+              <p className="mt-1 text-slate-600">{currentStartup?.solution || 'Not specified'}</p>
+            </div>
+          </div>
+        )}
+      </div>
+      <Button kind="secondary" onClick={()=>openModal('editStartup','Edit startup profile',currentStartup)}>Edit profile</Button>
+    </div>
+  </div>
+
+  <div className="mt-5 grid gap-4 md:grid-cols-2">
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">Team members</h3>
+        <Button kind="ghost" onClick={()=>openModal('team','Add team member')}><Plus size={14}/> Add member</Button>
+      </div>
+      <div className="mt-4 space-y-3">
+        {teamMembers.map((m: any) => (
+          <div key={m.id} className="flex items-center justify-between rounded-xl border border-slate-100 p-3">
+            <div className="flex items-center gap-3">
+              <Avatar initials={m.name.split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()} size="sm" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">{m.name}</p>
+                  {m.is_primary && <Pill tone="green">Primary</Pill>}
+                </div>
+                <p className="text-xs text-slate-500">{m.role_title} {m.email ? `· ${m.email}` : ''}</p>
+              </div>
+            </div>
+            <button onClick={()=>handleDeleteTeamMember(m.id, m.name)} title="Remove team member" className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition">
+              <Trash2 size={15}/>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
+      <h3 className="font-semibold">Profile completeness</h3>
+      <div className="mt-4 flex items-end justify-between">
+        <span className="text-3xl font-semibold text-ink">{currentStartup?.profile_completeness ?? 82}%</span>
+        <span className="text-xs font-semibold text-emerald-700">
+          {(currentStartup?.profile_completeness ?? 82) === 100 ? 'All 11 fields completed' : `${Math.round(11 * (1 - (currentStartup?.profile_completeness ?? 82)/100))} fields remaining`}
+        </span>
+      </div>
+      <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full rounded-full bg-forest transition-all duration-500" style={{ width: `${currentStartup?.profile_completeness ?? 82}%` }}/>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        Completeness is computed dynamically across 11 core fields (name, logo, tagline, sectors, stage, problem, solution, target market, business model, funding ask, location).
+      </p>
+    </div>
+  </div></>;
+    if(page==='Pitch Deck & Documents')return <><SectionTitle eyebrow="Secure document portal" title="Pitch deck & documents" desc="Store private pitch decks in Supabase Storage with automatic versioning and 60-second time-limited signed URLs." action={<Button onClick={()=>openModal('upload','Upload pitch deck')}><Upload size={15}/> Upload PDF</Button>}/>
+  <div className="grid gap-4 md:grid-cols-3">
+    {deckDocuments.map((doc: any) => (
+      <div key={doc.id} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft flex flex-col justify-between">
+        <div>
+          <div className="flex items-start justify-between">
+            <div className="rounded-xl bg-rose-50 p-3 text-rose-700"><FileText size={22}/></div>
+            <div className="flex items-center gap-1.5">
+              <Pill tone="blue">v{doc.version || 1}</Pill>
+              <button onClick={()=>handleDeletePitchDeck(doc.id, doc.title)} title="Delete document" className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition">
+                <Trash2 size={16}/>
+              </button>
+            </div>
+          </div>
+          <h3 className="mt-4 break-words text-sm font-semibold">{doc.title}</h3>
+          <p className="mt-1 text-xs text-slate-500">PDF · {(doc.file_size / (1024 * 1024)).toFixed(1)} MB</p>
+          <div className="mt-3 flex items-center justify-between">
+            <Pill tone={doc.visibility==='public'?'green':doc.visibility==='private'?'gray':'amber'}>
+              {doc.visibility || 'access_controlled'}
+            </Pill>
+            <span className="text-[10px] text-slate-400">
+              {doc.created_at && doc.created_at.includes('T') ? new Date(doc.created_at).toLocaleDateString() : 'Updated recently'}
+            </span>
+          </div>
+        </div>
+        <div className="mt-5 pt-3 border-t border-slate-100 flex gap-2">
+          <Button className="w-full" kind="secondary" onClick={()=>handleDownloadPitchDeck(doc)}>
+            <ExternalLink size={14}/> Download (60s URL)
+          </Button>
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
+    <div className="flex items-center justify-between">
+      <div>
+        <h3 className="font-semibold">Deck access requests</h3>
+        <p className="mt-0.5 text-xs text-slate-500">Investors and partners requesting permission to view confidential pitch decks</p>
+      </div>
+      <Pill tone="amber">{deckRequests.filter(r=>r.status==='pending').length} pending</Pill>
+    </div>
+    <div className="mt-4 space-y-3">
+      {deckRequests.map((req: any) => (
+        <div key={req.id} className="flex flex-col gap-3 rounded-xl border border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Avatar initials={(req.requester_name || 'NV').split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()} />
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold">{req.requester_name || 'Verified Investor'}</p>
+                <Pill tone={req.status==='approved'?'green':req.status==='rejected'?'red':'amber'}>{req.status || 'pending'}</Pill>
+              </div>
+              <p className="mt-1 text-xs text-slate-600">{req.notes || 'Requested access to pitch materials'}</p>
+              <p className="mt-1 text-[10px] text-slate-400">{req.created_at}</p>
+            </div>
+          </div>
+          {req.status === 'pending' ? (
+            <div className="flex gap-2 self-end sm:self-center">
+              <Button onClick={()=>handleApproveDeckRequest(req.id, req.requester_name || 'Investor')}>
+                <Check size={14}/> Approve
+              </Button>
+              <Button kind="secondary" onClick={()=>handleDeclineDeckRequest(req.id, req.requester_name || 'Investor')}>
+                Decline
+              </Button>
+            </div>
+          ) : (
+            <span className="text-xs font-medium text-slate-400 capitalize">Decision: {req.status}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  </div></>;
   if(page==='Users')return <><SectionTitle eyebrow="Administration" title="Users" desc="Review user access and suspend accounts when required."/><div className="rounded-2xl border border-slate-100 bg-white shadow-soft"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400" size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search users..." className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"/></div><Button kind="secondary" onClick={()=>notify('User export prepared in demo.')}>Export users</Button></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-5 py-4">User</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Joined</th><th className="px-5 py-4">Action</th></tr></thead><tbody>{[['Manmeet Singh','Founder','Active','Oct 18'],['Northstar Ventures','Investor','Pending','Oct 25'],['Dr. Kavita Mehra','Mentor','Pending','Oct 24'],['Punjab Innovation Hub','Incubator','Active','Oct 12'],['Riya Kapoor','Founder','Active','Oct 11']].filter(r=>r.join(' ').toLowerCase().includes(search.toLowerCase())).map(r=><tr key={r[0]} className="border-t border-slate-100"><td className="px-5 py-4 font-semibold">{r[0]}</td><td className="px-5 py-4"><Pill>{r[1]}</Pill></td><td className="px-5 py-4"><Pill tone={r[2]==='Active'?'green':'amber'}>{r[2]}</Pill></td><td className="px-5 py-4 text-slate-500">{r[3]}</td><td className="px-5 py-4"><Button kind="secondary" onClick={()=>notify(`${r[0]} account status updated in demo.`)}>Manage</Button></td></tr>)}</tbody></table></div></div></>;
   if(page==='Reported Content')return <><SectionTitle eyebrow="Trust & safety" title="Reported content" desc="Review reports and keep startup discovery useful and trustworthy."/><div className="space-y-4">{[['Potentially misleading funding claim','Startup profile · Reported by a user','High'],['Duplicate startup listing','Startup listing · Reported by a founder','Medium'],['Unwanted message','Message thread · Reported by a recipient','Medium']].map((x,i)=><div key={x[0]} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><span className="rounded-xl bg-rose-50 p-3 text-rose-700"><Inbox size={20}/></span><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{x[0]}</h3><Pill tone={x[2]==='High'?'red':'amber'}>{x[2]} priority</Pill></div><p className="mt-1 text-sm text-slate-500">{x[1]}</p></div><div className="flex gap-2"><Button onClick={()=>notify('Report marked resolved in demo.')}>Resolve</Button><Button kind="secondary" onClick={()=>notify('Listing removed in demo.')}>Remove listing</Button></div></div></div>)}</div></>;
   if(page==='Messages')return <><SectionTitle eyebrow="Communication" title="Messages" desc="Simple conversations between connected users. Real-time chat is future scope."/><div className="grid min-h-[520px] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-soft md:grid-cols-[280px_1fr]"><div className="border-b border-slate-100 p-3 md:border-b-0 md:border-r"><div className="relative"><Search size={15} className="absolute left-3 top-3 text-slate-400"/><input placeholder="Search conversations" className="w-full rounded-xl bg-slate-50 py-2.5 pl-9 pr-3 text-xs outline-none"/></div>{[{name:'Northstar Ventures',sub:'Pilot results would be great',initials:'NV'},{name:'Riya Kapoor',sub:'Thanks for the introduction!',initials:'RK'},{name:'Punjab Innovation Hub',sub:'Application received',initials:'PI'}].map((x,i)=><button key={x.name} onClick={()=>{}} className={cn('mt-2 flex w-full items-center gap-3 rounded-xl p-3 text-left',i===0?'bg-emerald-50':'hover:bg-slate-50')}><Avatar initials={x.initials} size="sm"/><div className="min-w-0"><p className="truncate text-xs font-semibold">{x.name}</p><p className="mt-1 truncate text-[11px] text-slate-500">{x.sub}</p></div></button>)}</div><div className="flex min-h-[400px] flex-col"><div className="flex items-center gap-3 border-b border-slate-100 p-4"><Avatar initials="NV"/><div><p className="text-sm font-semibold">Northstar Ventures</p><p className="mt-1 text-xs text-emerald-700">Connected · Verified</p></div></div><div className="flex-1 space-y-4 bg-slate-50/60 p-5"><div className="max-w-[80%] rounded-2xl rounded-tl-sm border border-slate-100 bg-white p-3 text-sm leading-6">Hi! We would love to learn more about your pilot results.<p className="mt-2 text-[10px] text-slate-400">10:42 AM</p></div>{messages.slice(1).map((m,i)=><div key={i} className="ml-auto max-w-[80%] rounded-2xl rounded-tr-sm bg-forest p-3 text-sm leading-6 text-white">{m.text}<p className="mt-2 text-[10px] text-white/60">{m.time}</p></div>)}</div><form onSubmit={e=>{e.preventDefault();if(messageDraft.trim()){setMessages(old=>[...old,{from:'You',text:messageDraft,time:'Now'}]);setMessageDraft('')}}} className="flex gap-2 border-t border-slate-100 p-3"><input value={messageDraft} onChange={e=>setMessageDraft(e.target.value)} placeholder="Write a message..." className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/><Button><Send size={15}/> Send</Button></form></div></div></>;
@@ -271,7 +713,7 @@ export default function Home(){
 
  return <div className="min-h-screen bg-canvas">
   {role==='Public'?<><header className="sticky top-0 z-30 border-b border-slate-100 bg-white/90 backdrop-blur"><div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 lg:px-8"><button onClick={()=>navTo('Home')} className="flex items-center gap-2.5"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-forest text-white"><span className="text-lg font-bold">f.</span></span><span className="text-left"><span className="block text-[15px] font-bold tracking-tight text-ink">founders den</span><span className="block text-[10px] tracking-wide text-slate-400">BUILD WHAT'S NEXT</span></span></button><nav className="hidden items-center gap-7 md:flex">{navPublic.map(n=><button key={n} onClick={()=>navTo(n)} className={cn('text-sm transition',page===n?'font-semibold text-forest':'text-slate-500 hover:text-ink')}>{n}</button>)}</nav><div className="flex items-center gap-2"><button onClick={()=>openModal('auth','Welcome back')} className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 sm:block">Log in</button><Button onClick={()=>openModal('auth','Join Founders Den')} className="hidden sm:inline-flex">Sign up <ArrowRight size={14}/></Button><button onClick={()=>setMobileNav(!mobileNav)} className="rounded-xl p-2 text-slate-600 md:hidden"><Menu size={20}/></button></div></div>{mobileNav&&<div className="border-t border-slate-100 bg-white p-3 md:hidden">{navPublic.map(n=><button key={n} onClick={()=>navTo(n)} className="block w-full rounded-xl px-3 py-3 text-left text-sm hover:bg-slate-50">{n}</button>)}<button onClick={()=>openModal('auth','Join Founders Den')} className="block w-full rounded-xl px-3 py-3 text-left text-sm font-semibold text-forest">Sign up</button></div>}</header>{renderPublic()}<footer className="border-t border-slate-100 bg-white"><div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-7 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between lg:px-8"><div className="flex items-center gap-2 font-semibold text-slate-600"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-forest text-white">f.</span> founders den</div><p>Connecting ideas with the people who help them grow.</p><div className="flex gap-4"><button onClick={()=>navTo('How It Works')}>How it works</button><button onClick={()=>openModal('auth','Join Founders Den')}>Join the network</button><span>Prototype · 2026</span></div></div></footer></>:<div className="min-h-screen lg:flex"><aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[270px] flex-col border-r border-slate-100 bg-white transition-transform lg:translate-x-0',mobileNav?'translate-x-0':'-translate-x-full')}><div className="flex h-[76px] items-center justify-between border-b border-slate-100 px-5"><button onClick={()=>enterRole('Public')} className="flex items-center gap-2.5"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-forest text-lg font-bold text-white">f.</span><span className="text-left"><span className="block text-sm font-bold text-ink">founders den</span><span className="block text-[10px] text-slate-400">{config?.label}</span></span></button><button onClick={()=>setMobileNav(false)} className="rounded-lg p-2 text-slate-400 lg:hidden"><X size={18}/></button></div><div className="border-b border-slate-100 p-4"><button onClick={()=>openModal('switchRole','Switch demo role')} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-forest"><UserRound size={17}/></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{role==='Founder'?'Manmeet Singh':role==='Investor'?'Northstar Ventures':role==='Mentor'?'Dr. Kavita Mehra':role==='Incubator'?'Punjab Innovation Hub':'Platform admin'}</span><span className="mt-1 block text-[10px] text-slate-500">{role} workspace</span></span><ChevronDown size={15} className="text-slate-400"/></button></div><nav className="scrollbar-hide flex-1 overflow-y-auto px-3 py-4">{sidebar.map(item=><button key={item.label} onClick={()=>navTo(item.label)} className={cn('mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition',item.active?'bg-emerald-50 text-forest':'text-slate-500 hover:bg-slate-50 hover:text-ink')}><item.icon size={17}/><span className="flex-1">{item.label}</span>{item.label==='Messages'&&<span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] text-forest">2</span>}</button>)}</nav><div className="border-t border-slate-100 p-4"><div className="rounded-xl bg-[#f3f8f3] p-3"><div className="flex items-center gap-2 text-forest"><CircleHelp size={16}/><span className="text-xs font-semibold">Need a hand?</span></div><p className="mt-2 text-[11px] leading-5 text-slate-500">Explore the demo workspace and try the core flows.</p><button onClick={()=>notify('Help center is a demo placeholder.')} className="mt-2 text-xs font-semibold text-forest">Open help center <ArrowRight size={12} className="inline"/></button></div><button onClick={()=>enterRole('Public')} className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"><LogOut size={16}/> Exit workspace</button></div></aside>{mobileNav&&<button onClick={()=>setMobileNav(false)} className="fixed inset-0 z-30 bg-ink/30 lg:hidden"/>}<main className="min-h-screen min-w-0 flex-1 lg:ml-[270px]"><header className="sticky top-0 z-20 flex h-[76px] items-center justify-between border-b border-slate-100 bg-white/90 px-4 backdrop-blur sm:px-7"><div className="flex items-center gap-3"><button onClick={()=>setMobileNav(true)} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 lg:hidden"><Menu size={20}/></button><div><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">{role} workspace</p><p className="mt-1 text-sm font-semibold text-ink">{page}</p></div></div><div className="flex items-center gap-2"><span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 sm:inline-flex">Demo environment</span><div className="relative"><button onClick={()=>setNotificationsOpen(!notificationsOpen)} className="relative rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50"><Bell size={17}/><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-emerald-600"/></button>{notificationsOpen&&<div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-xl"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Notifications</h3><button onClick={()=>setNotificationsOpen(false)}><X size={15}/></button></div>{[['Investor access request','Northstar Ventures requested your pitch deck.','10 min ago'],['Program update','Your application is under review.','Yesterday'],['New match','A new opportunity matches your profile.','2 days ago']].map(x=><div key={x[0]} className="mt-4 border-t border-slate-100 pt-3"><p className="text-xs font-semibold">{x[0]}</p><p className="mt-1 text-xs leading-5 text-slate-500">{x[1]}</p><p className="mt-1 text-[10px] text-slate-400">{x[2]}</p></div>)}</div>}</div><Avatar initials={role==='Founder'?'MS':role==='Investor'?'NV':role==='Mentor'?'KM':role==='Incubator'?'PI':'AD'} size="sm"/></div></header><div className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{renderDashboard()}</div><footer className="border-t border-slate-100 px-5 py-5 text-xs text-slate-400 sm:px-9">Founders Den · Clickable MVP prototype <span className="mx-2">·</span> Demo content only</footer></main></div>}
-  {modal&&<Modal modal={modal} close={()=>setModal(null)} notify={notify} addStartup={addStartup} newStartup={newStartup} setNewStartup={setNewStartup} enterRole={enterRole} setRole={setRole} setPage={setPage} role={role} />}
+  {modal&&<Modal modal={modal} close={()=>setModal(null)} notify={notify} addStartup={addStartup} newStartup={newStartup} setNewStartup={setNewStartup} enterRole={enterRole} setRole={setRole} setPage={setPage} role={role} startupEditForm={startupEditForm} setStartupEditForm={setStartupEditForm} handleSaveStartupProfile={handleSaveStartupProfile} handleUploadDeckFile={handleUploadDeckFile} isUploading={isUploading} uploadProgress={uploadProgress} uploadVisibility={uploadVisibility} setUploadVisibility={setUploadVisibility} teamMemberForm={teamMemberForm} setTeamMemberForm={setTeamMemberForm} handleAddTeamMember={handleAddTeamMember} />}
   {toast&&<div className="fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-medium text-white shadow-xl"><CheckCircle2 size={17} className="text-emerald-300"/>{toast}</div>}
  </div>;
 }
@@ -280,7 +722,7 @@ function ActivityRows({items}:{items:string[][]}){return <div>{items.map((x,i)=>
 function RequestRow({name,subtitle,initials,status,onClick}:{name:string;subtitle:string;initials:string;status:string;onClick:()=>void}){return <button onClick={onClick} className="mt-4 flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left hover:bg-slate-50"><Avatar initials={initials}/><span className="flex-1"><span className="block text-sm font-semibold">{name}</span><span className="mt-1 block text-xs text-slate-500">{subtitle}</span></span><Pill tone="amber">{status}</Pill></button>}
 function Info({label,value}:{label:string;value:string}){return <div><p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>}
 function Field({label,value}:{label:string;value:string}){return <div><label className="text-xs font-semibold text-slate-500">{label.toUpperCase()}</label><input defaultValue={value} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/></div>}
-function Modal({modal,close,notify,addStartup,newStartup,setNewStartup,enterRole,setRole,setPage,role}:{modal:{type:string;startup?:Startup;title?:string};close:()=>void;notify:(s:string)=>void;addStartup:()=>void;newStartup:{name:string;tagline:string;sector:string;stage:string;location:string;ask:string;description:string};setNewStartup:React.Dispatch<React.SetStateAction<{name:string;tagline:string;sector:string;stage:string;location:string;ask:string;description:string}>>;enterRole:(r:Role)=>void;setRole:(r:Role)=>void;setPage:(p:string)=>void;role:Role}){
+function Modal({modal,close,notify,addStartup,newStartup,setNewStartup,enterRole,setRole,setPage,role, startupEditForm, setStartupEditForm, handleSaveStartupProfile, handleUploadDeckFile, isUploading, uploadProgress, uploadVisibility, setUploadVisibility, teamMemberForm, setTeamMemberForm, handleAddTeamMember}: any){
   const auth = useAuth();
   const [authRole, setAuthRole] = useState<Role>('Founder');
   const [authMode, setAuthMode] = useState<'signup' | 'login' | 'forgot'>('signup');
@@ -524,11 +966,150 @@ function Modal({modal,close,notify,addStartup,newStartup,setNewStartup,enterRole
       )}
     </>
   )}</div>}
-  {(modal.type==='newStartup'||modal.type==='editStartup')&&<div className="mt-5 space-y-4"><div><label className="text-xs font-semibold text-slate-500">STARTUP NAME *</label><input value={newStartup.name} onChange={e=>setNewStartup(o=>({...o,name:e.target.value}))} placeholder="e.g. TerraLoop" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500"/></div><div><label className="text-xs font-semibold text-slate-500">TAGLINE</label><input value={newStartup.tagline} onChange={e=>setNewStartup(o=>({...o,tagline:e.target.value}))} placeholder="A one-line description" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500"/></div><div className="grid gap-4 sm:grid-cols-2"><div><label className="text-xs font-semibold text-slate-500">SECTOR</label><select value={newStartup.sector} onChange={e=>setNewStartup(o=>({...o,sector:e.target.value}))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"><option>AgriTech</option><option>Climate Tech</option><option>HealthTech</option><option>EdTech</option><option>FinTech</option><option>Clean Energy</option><option>AI</option><option>SaaS</option></select></div><div><label className="text-xs font-semibold text-slate-500">STAGE</label><select value={newStartup.stage} onChange={e=>setNewStartup(o=>({...o,stage:e.target.value}))} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"><option>Idea</option><option>Validation</option><option>MVP</option><option>Early traction</option><option>Growth</option></select></div></div><div className="grid gap-4 sm:grid-cols-2"><div><label className="text-xs font-semibold text-slate-500">LOCATION</label><input value={newStartup.location} onChange={e=>setNewStartup(o=>({...o,location:e.target.value}))} placeholder="City, country" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"/></div><div><label className="text-xs font-semibold text-slate-500">FUNDING ASK</label><input value={newStartup.ask} onChange={e=>setNewStartup(o=>({...o,ask:e.target.value}))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"/></div></div><div><label className="text-xs font-semibold text-slate-500">PROBLEM / SOLUTION</label><textarea value={newStartup.description} onChange={e=>setNewStartup(o=>({...o,description:e.target.value}))} placeholder="What problem are you solving and how?" className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 p-3 text-sm"/></div><Button className="w-full" onClick={addStartup}>Create startup profile <ArrowRight size={15}/></Button></div>}
-  {modal.type==='upload'&&<div className="mt-5"><label className="flex cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center hover:border-emerald-400"><Upload size={26} className="text-forest"/><p className="mt-3 text-sm font-semibold">Choose a PDF pitch deck</p><p className="mt-1 text-xs text-slate-500">PDF only · Demo UI, no file is uploaded</p><input type="file" accept="application/pdf" className="sr-only" onChange={e=>{if(e.target.files?.[0])notify(`${e.target.files[0].name} selected for demo upload.`)}}/></label><label className="mt-5 block text-xs font-semibold text-slate-500">DOCUMENT VISIBILITY</label><div className="mt-2 space-y-2">{[['Public','Visible to anyone browsing startups.'],['Access-controlled','Only approved users can view the file.'],['Private','Only you and authorized workspace members.']].map(([v,d])=><button key={v} onClick={()=>setVisibility(v)} className={cn('flex w-full items-start gap-3 rounded-xl border p-3 text-left',visibility===v?'border-emerald-600 bg-emerald-50':'border-slate-200')}><span className={cn('mt-0.5 h-4 w-4 rounded-full border',visibility===v?'border-[5px] border-forest':'border-slate-300')}/><span><span className="block text-sm font-semibold">{v}</span><span className="mt-1 block text-xs text-slate-500">{d}</span></span></button>)}</div><Button className="mt-5 w-full" onClick={()=>closeAndToast(`Demo upload flow complete. Visibility set to ${visibility}.`)}>Save document settings</Button></div>}
+  {(modal.type==='newStartup'||modal.type==='editStartup')&&<div className="mt-5 space-y-4">
+    <div>
+      <label className="text-xs font-semibold text-slate-500">STARTUP NAME *</label>
+      <input required value={startupEditForm.name || ''} onChange={e=>setStartupEditForm((o:any)=>({...o,name:e.target.value}))} placeholder="e.g. FarmSense" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/>
+    </div>
+    <div>
+      <label className="text-xs font-semibold text-slate-500">TAGLINE *</label>
+      <input required value={startupEditForm.tagline || ''} onChange={e=>setStartupEditForm((o:any)=>({...o,tagline:e.target.value}))} placeholder="A one-line description of your startup" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/>
+    </div>
+    <div>
+      <label className="text-xs font-semibold text-slate-500">LOGO URL</label>
+      <input value={startupEditForm.logo || ''} onChange={e=>setStartupEditForm((o:any)=>({...o,logo:e.target.value}))} placeholder="https://example.com/logo.png" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/>
+    </div>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label className="text-xs font-semibold text-slate-500">PRIMARY SECTOR</label>
+        <select value={startupEditForm.sector || 'AgriTech'} onChange={e=>{const sec=e.target.value; setStartupEditForm((o:any)=>({...o,sector:sec,sectors:[sec]}));}} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+          <option>AgriTech</option><option>Climate Tech</option><option>HealthTech</option><option>EdTech</option><option>FinTech</option><option>Clean Energy</option><option>AI</option><option>SaaS</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-slate-500">STAGE</label>
+        <select value={startupEditForm.stage || 'mvp'} onChange={e=>setStartupEditForm((o:any)=>({...o,stage:e.target.value}))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+          <option value="idea">Idea</option><option value="validation">Validation</option><option value="mvp">MVP</option><option value="early_traction">Early traction</option><option value="growth">Growth</option>
+        </select>
+      </div>
+    </div>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label className="text-xs font-semibold text-slate-500">LOCATION *</label>
+        <input required value={startupEditForm.location || ''} onChange={e=>setStartupEditForm((o:any)=>({...o,location:e.target.value}))} placeholder="Ludhiana, Punjab" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-slate-500">FUNDING ASK (INR)</label>
+        <input type="number" min="0" value={startupEditForm.funding_ask ?? 1500000} onChange={e=>setStartupEditForm((o:any)=>({...o,funding_ask:Number(e.target.value)}))} placeholder="1500000" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/>
+      </div>
+    </div>
+    <div>
+      <label className="text-xs font-semibold text-slate-500">VISIBILITY</label>
+      <select value={startupEditForm.visibility || 'access_controlled'} onChange={e=>setStartupEditForm((o:any)=>({...o,visibility:e.target.value}))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+        <option value="public">Public (Open discovery for verified community)</option>
+        <option value="access_controlled">Access-controlled (Pitch materials require approval)</option>
+        <option value="private">Private (Stealth mode - owner & admin only)</option>
+      </select>
+    </div>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label className="text-xs font-semibold text-slate-500">PROBLEM STATEMENT</label>
+        <textarea value={startupEditForm.problem || ''} onChange={e=>setStartupEditForm((o:any)=>({...o,problem:e.target.value}))} placeholder="What critical problem are you solving?" className="mt-1.5 min-h-20 w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-500"/>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-slate-500">SOLUTION</label>
+        <textarea value={startupEditForm.solution || ''} onChange={e=>setStartupEditForm((o:any)=>({...o,solution:e.target.value}))} placeholder="How does your product solve it?" className="mt-1.5 min-h-20 w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-emerald-500"/>
+      </div>
+    </div>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label className="text-xs font-semibold text-slate-500">TARGET MARKET</label>
+        <input value={startupEditForm.target_market || ''} onChange={e=>setStartupEditForm((o:any)=>({...o,target_market:e.target.value}))} placeholder="e.g. 1M Punjab farmers" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-emerald-500"/>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-slate-500">BUSINESS MODEL</label>
+        <input value={startupEditForm.business_model || ''} onChange={e=>setStartupEditForm((o:any)=>({...o,business_model:e.target.value}))} placeholder="e.g. Annual SaaS + hardware lease" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-emerald-500"/>
+      </div>
+    </div>
+    <Button className="w-full mt-2" onClick={()=>handleSaveStartupProfile(startupEditForm)}>
+      {modal.type==='editStartup' ? 'Save startup profile' : 'Create startup profile'} <ArrowRight size={15}/>
+    </Button>
+  </div>}
+  {modal.type==='upload'&&<div className="mt-5 space-y-4">
+    <label className="flex cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center hover:border-emerald-400 transition">
+      <Upload size={28} className="text-forest"/>
+      <p className="mt-3 text-sm font-semibold">Choose a PDF pitch deck</p>
+      <p className="mt-1 text-xs text-slate-500">PDF only · Max 10 MB per file</p>
+      <input type="file" accept="application/pdf" className="sr-only" onChange={e=>{
+        const f = e.target.files?.[0];
+        if (f) handleUploadDeckFile(f);
+      }}/>
+    </label>
+
+    {isUploading && (
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+        <div className="flex items-center justify-between text-xs font-semibold text-emerald-900">
+          <span>Uploading pitch deck to Supabase storage...</span>
+          <span>{uploadProgress || 30}%</span>
+        </div>
+        <div className="mt-2 h-2 rounded-full bg-emerald-200 overflow-hidden">
+          <div className="h-full bg-forest transition-all duration-300" style={{ width: `${uploadProgress || 30}%` }}/>
+        </div>
+      </div>
+    )}
+
+    <div>
+      <label className="block text-xs font-semibold text-slate-500">DOCUMENT VISIBILITY RULE</label>
+      <div className="mt-2 space-y-2">
+        {[
+          ['public','Public','Any verified community member can download.'],
+          ['access_controlled','Access-controlled','Requires founder approval before download is granted.'],
+          ['private','Private','Confidential to startup founder and administrator only.'],
+        ].map(([val, label, desc])=>(
+          <button key={val} type="button" onClick={()=>setUploadVisibility(val as any)} className={cn('flex w-full items-start gap-3 rounded-xl border p-3 text-left transition', uploadVisibility===val ? 'border-emerald-600 bg-emerald-50/80 shadow-sm' : 'border-slate-200 hover:bg-slate-50')}>
+            <span className={cn('mt-0.5 h-4 w-4 rounded-full border', uploadVisibility===val ? 'border-[5px] border-forest' : 'border-slate-300')}/>
+            <span>
+              <span className="block text-sm font-semibold">{label}</span>
+              <span className="mt-0.5 block text-xs text-slate-500">{desc}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  </div>}
   {(modal.type==='document')&&<div className="mt-5"><p className="text-sm leading-6 text-slate-500">Choose the visibility for this document. Private documents should only be shared through explicit access approval.</p><div className="mt-4 space-y-2">{['Public','Access-controlled','Private'].map(v=><button key={v} onClick={()=>setVisibility(v)} className={cn('flex w-full items-center justify-between rounded-xl border p-3 text-sm',visibility===v?'border-emerald-600 bg-emerald-50':'border-slate-200')}>{v}{visibility===v&&<Check size={16}/>}</button>)}</div><div className="mt-5 flex gap-2"><Button onClick={()=>closeAndToast(`Document access updated to ${visibility} in demo.`)}>Save access</Button><Button kind="secondary" onClick={()=>closeAndToast('Access request list opened in demo.')}>View requests</Button></div></div>}
   {(modal.type==='newProgram'||modal.type==='editProgram')&&<div className="mt-5 space-y-4">{[['Program name','e.g. Campus Founders Fellowship'],['Organization','Your incubator name'],['Sectors','AgriTech, AI, Climate Tech'],['Eligibility','Student founders, MVP stage...'],['Application deadline','30 Nov 2026']].map(([l,p])=><div key={l}><label className="text-xs font-semibold text-slate-500">{l.toUpperCase()}</label><input placeholder={p} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500"/></div>)}<Button className="w-full" onClick={()=>closeAndToast('Program saved in demo. The production version will persist this to Supabase.')}>Save program</Button></div>}
-  {(modal.type==='mentor'||modal.type==='meeting'||modal.type==='team'||modal.type==='request')&&<div className="mt-5 space-y-4"><p className="text-sm leading-6 text-slate-500">Add a short note so the recipient understands what you need and what the next step should be.</p><div><label className="text-xs font-semibold text-slate-500">MESSAGE</label><textarea placeholder="Hi, I'd like to connect because..." className="mt-2 min-h-28 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-emerald-500"/></div>{modal.type==='meeting'&&<div><label className="text-xs font-semibold text-slate-500">PROPOSED DATE</label><input type="date" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"/></div>}<Button className="w-full" onClick={()=>closeAndToast('Request sent in the clickable demo.')}>Send request <Send size={14}/></Button></div>}
+  {modal.type==='team'&&<div className="mt-5 space-y-4">
+    <div className="space-y-3">
+      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Add new team member</h4>
+      <div>
+        <label className="block text-xs text-slate-500">Full Name *</label>
+        <input required value={teamMemberForm.name} onChange={e=>setTeamMemberForm((o:any)=>({...o,name:e.target.value}))} placeholder="e.g. Jaspreet Kaur" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"/>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-500">Role Title *</label>
+        <input required value={teamMemberForm.role_title} onChange={e=>setTeamMemberForm((o:any)=>({...o,role_title:e.target.value}))} placeholder="e.g. Co-Founder & CTO" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"/>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-500">Email Address (Optional)</label>
+        <input type="email" value={teamMemberForm.email} onChange={e=>setTeamMemberForm((o:any)=>({...o,email:e.target.value}))} placeholder="jaspreet@farmsense.example.com" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"/>
+      </div>
+      <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700">
+        <input type="checkbox" checked={teamMemberForm.is_primary} onChange={e=>setTeamMemberForm((o:any)=>({...o,is_primary:e.target.checked}))} className="rounded text-forest focus:ring-forest"/>
+        <span>Key Primary Contact for Investors</span>
+      </label>
+      <Button className="w-full mt-2" onClick={()=>{
+        if (!teamMemberForm.name || !teamMemberForm.role_title) {
+          notify('Name and role title are required.');
+          return;
+        }
+        handleAddTeamMember(teamMemberForm);
+      }}>
+        Add team member
+      </Button>
+    </div>
+  </div>}
+  {(modal.type==='mentor'||modal.type==='meeting'||modal.type==='request')&&<div className="mt-5 space-y-4"><p className="text-sm leading-6 text-slate-500">Add a short note so the recipient understands what you need and what the next step should be.</p><div><label className="text-xs font-semibold text-slate-500">MESSAGE</label><textarea placeholder="Hi, I'd like to connect because..." className="mt-2 min-h-28 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-emerald-500"/></div>{modal.type==='meeting'&&<div><label className="text-xs font-semibold text-slate-500">PROPOSED DATE</label><input type="date" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"/></div>}<Button className="w-full" onClick={()=>closeAndToast('Request sent in the clickable demo.')}>Send request <Send size={14}/></Button></div>}
   {!(['startup','auth','switchRole','newStartup','editStartup','upload','document','newProgram','editProgram','mentor','meeting','team','request'].includes(modal.type))&&<div className="mt-5"><p className="text-sm leading-6 text-slate-500">This interaction is represented in the clickable MVP. In production, it will be backed by Supabase authentication, database records, and role-based policies.</p><Button className="mt-5 w-full" onClick={()=>closeAndToast('Action completed in demo.')}>Continue</Button></div>}
   </div></div>;
 }

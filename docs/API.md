@@ -500,3 +500,189 @@ Every administrative action (`VERIFICATION_APPROVED`, `VERIFICATION_REJECTED`, `
 - `metadata`: JSON payload containing rejection reason, approval notes, or status changes.
 - `created_at`: Timestamp.
 
+---
+
+## Endpoints (Iteration 4: Startup Profiles, Pitch Decks & Access Control)
+
+### 1. Founder Startup Management
+
+#### `POST /api/v1/startups`
+Creates a new startup profile.
+- **Auth**: `Bearer <token>` (`founder` or `admin` role required)
+- **Request Body**:
+```json
+{
+  "name": "FarmSense AI",
+  "logo": "https://images.unsplash.com/photo-farm.png",
+  "tagline": "AI-powered precision agriculture for smallholder farmers",
+  "sectors": ["AgriTech", "AI"],
+  "stage": "mvp",
+  "problem": "Crop yield unpredictability causes 40% income loss annually.",
+  "solution": "IoT micro-sensors and AI satellite analysis predict irrigation and harvest cycles.",
+  "target_market": "120M smallholder farmers in South Asia",
+  "business_model": "Hardware subscription + farm advisory SaaS",
+  "funding_ask": 2500000,
+  "currency": "INR",
+  "location": "Ludhiana, Punjab, India",
+  "visibility": "access_controlled"
+}
+```
+- **Response**: `201 Created`
+  - Returns startup object including computed `profile_completeness` (0-100%).
+
+#### `GET /api/v1/me/startups`
+Retrieves all startups owned by the authenticated user.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK` (Array of startups with computed `profile_completeness`)
+
+#### `GET /api/v1/startups/:id`
+Retrieves startup details with visibility enforcement:
+- `public`: any verified user or owner/admin.
+- `access_controlled`: visible if approved or if owner/admin.
+- `private`: owner and admin only.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `PATCH /api/v1/startups/:id`
+Updates startup profile fields. Only the startup founder (owner) or an platform admin can edit.
+- **Auth**: `Bearer <token>` (Owner or Admin)
+- **Request Body**: Partial startup fields.
+- **Response**: `200 OK` (Updated startup object with recomputed `profile_completeness`)
+
+#### `DELETE /api/v1/startups/:id`
+Deletes a startup profile. Only the startup owner or admin can delete.
+- **Auth**: `Bearer <token>` (Owner or Admin)
+- **Response**: `200 OK`
+
+---
+
+### 2. Team Member Management
+
+#### `GET /api/v1/startups/:id/team-members`
+Lists all team members of a startup.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK` (Array of team members)
+
+#### `POST /api/v1/startups/:id/team-members`
+Adds a team member to the startup.
+- **Auth**: `Bearer <token>` (Startup owner or admin)
+- **Request Body**:
+```json
+{
+  "name": "Jaspreet Kaur",
+  "role_title": "Co-Founder & CTO",
+  "email": "jaspreet@farmsense.example.com",
+  "is_primary": true
+}
+```
+- **Response**: `201 Created`
+
+#### `PATCH /api/v1/startups/:id/team-members/:memberId`
+Updates team member details.
+- **Auth**: `Bearer <token>` (Startup owner or admin)
+- **Response**: `200 OK`
+
+#### `DELETE /api/v1/startups/:id/team-members/:memberId`
+Removes a team member.
+- **Auth**: `Bearer <token>` (Startup owner or admin)
+- **Response**: `200 OK`
+
+---
+
+### 3. Profile Completeness Algorithm
+`profile_completeness` (0 to 100) is dynamically calculated from 11 core startup fields:
+1. `name`
+2. `logo`
+3. `tagline`
+4. `sectors` (must be non-empty array)
+5. `stage`
+6. `problem`
+7. `solution`
+8. `target_market`
+9. `business_model`
+10. `funding_ask` (numeric value > 0)
+11. `location`
+
+Each populated field contributes `Math.round(100 / 11)` (~9%) with 100% when all 11 fields are filled.
+
+---
+
+### 4. Pitch Decks & Documents (Supabase Storage)
+
+#### `POST /api/v1/startups/:id/documents`
+Uploads a pitch deck or supporting document to the private Supabase Storage bucket `startup-documents`.
+- **Auth**: `Bearer <token>` (Startup owner or admin)
+- **Content-Type**: `multipart/form-data`
+- **Fields**:
+  - `file`: PDF only, max 10MB.
+  - `title`: Document title string.
+  - `type`: `pitch_deck` (default), `financials`, or `other`.
+  - `visibility`: `public`, `access_controlled` (default), or `private`.
+- **Versioning**: Each new upload for the startup automatically computes and assigns the next incremented integer version (`version = max(versions) + 1`).
+- **Response**: `201 Created`
+
+#### `GET /api/v1/startups/:id/documents`
+Lists documents for a startup that the caller is authorized to view.
+- **Auth**: `Bearer <token>`
+- **Response**: `200 OK`
+
+#### `DELETE /api/v1/documents/:id`
+Deletes document record and removes file from Supabase Storage bucket.
+- **Auth**: `Bearer <token>` (Owner or Admin)
+- **Response**: `200 OK`
+
+---
+
+### 5. Access Control & 60-Second Signed URLs
+
+#### `POST /api/v1/documents/:id/access-requests`
+Creates an access request to view an `access_controlled` pitch deck.
+- **Auth**: `Bearer <token>` (Verified user)
+- **Request Body**:
+```json
+{
+  "notes": "Interested in reviewing your deck for Seed funding."
+}
+```
+- **Notifications**: Automatically notifies the startup founder via the `notify()` service.
+- **Response**: `201 Created`
+
+#### `GET /api/v1/documents/:id/access-requests`
+Lists all access requests for a document.
+- **Auth**: `Bearer <token>` (Startup owner or admin)
+- **Response**: `200 OK`
+
+#### `POST /api/v1/document-access-requests/:id/approve`
+Approves an access request.
+- **Auth**: `Bearer <token>` (Startup owner or admin)
+- **Request Body**: Optional `{ "notes": "Approved" }`
+- **Notifications**: Automatically notifies the requesting user of approval.
+- **Response**: `200 OK`
+
+#### `POST /api/v1/document-access-requests/:id/decline`
+Declines an access request.
+- **Auth**: `Bearer <token>` (Startup owner or admin)
+- **Request Body**: Optional `{ "notes": "Not seeking investor meetings at this stage." }`
+- **Notifications**: Automatically notifies the requesting user of decline.
+- **Response**: `200 OK`
+
+#### `GET /api/v1/documents/:id/download`
+Generates a time-limited signed URL valid for **60 seconds** only.
+- **Auth**: `Bearer <token>`
+- **Access Rule Matrix**:
+  - **Owner & Admin**: Always allowed.
+  - **`public`**: Any user with `verification_status: "verified"` is allowed. Unverified users receive `403 UNVERIFIED_ACCOUNT`.
+  - **`access_controlled`**: Refused with `403 ACCESS_REQUIRED` unless an access request has been approved. Refused if pending or declined.
+  - **`private`**: Refused with `403 ACCESS_DENIED` for anyone except owner or admin.
+- **Response**: `200 OK`
+```json
+{
+  "data": {
+    "download_url": "https://fqbixskkrtlbvplchjjp.supabase.co/storage/v1/object/sign/startup-documents/...?token=...",
+    "expires_in": 60,
+    "version": 1
+  }
+}
+```
+
+

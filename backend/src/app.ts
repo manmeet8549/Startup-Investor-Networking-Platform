@@ -11,6 +11,8 @@ import { meRouter } from './routes/me.routes.js';
 import { profileRouter } from './routes/profile.routes.js';
 import { dealRouter } from './routes/deal.routes.js';
 import { adminRouter } from './routes/admin.routes.js';
+import { startupRouter } from './routes/startup.routes.js';
+import { documentRouter } from './routes/document.routes.js';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware.js';
 import { config } from './config.js';
 
@@ -75,6 +77,8 @@ apiRouter.use(meRouter);
 apiRouter.use(profileRouter);
 apiRouter.use(dealRouter);
 apiRouter.use('/admin', adminRouter);
+apiRouter.use(startupRouter);
+apiRouter.use(documentRouter);
 
 app.use('/api/v1', apiRouter);
 

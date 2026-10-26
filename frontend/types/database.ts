@@ -78,13 +78,20 @@ export interface Startup {
   tagline: string;
   description: string;
   sector: string;
+  sectors?: string[];
   stage: StartupStage;
   location: string;
   funding_ask: number;
   currency: string;
   visibility: Visibility;
+  logo?: string | null;
+  problem?: string | null;
+  solution?: string | null;
+  target_market?: string | null;
+  business_model?: string | null;
   pitch_deck_url: string | null;
   website: string | null;
+  profile_completeness?: number;
   created_at: string;
   updated_at: string;
 }

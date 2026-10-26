@@ -10,6 +10,7 @@ import {
 } from '../schemas/role-profile.schema.js';
 import * as profileService from '../services/profile.service.js';
 import * as roleProfileService from '../services/role-profile.service.js';
+import * as startupService from '../services/startup.service.js';
 
 export const meRouter = Router();
 
@@ -130,3 +131,16 @@ meRouter.put('/me/incubator-profile', validateBody(incubatorProfileUpdateSchema)
     next(error);
   }
 });
+
+// GET /me/startups - List all startups belonging to the authenticated founder
+meRouter.get('/me/startups', async (req, res, next) => {
+  try {
+    const startups = await startupService.listMyStartups(req.user!.id);
+    res.status(200).json({
+      data: startups,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+

@@ -7,7 +7,7 @@
 | **Iteration 1** | **Backend Scaffolding, DB Migrations, Auth, Profiles, Student Flag & Verification Queue** | **Completed** |
 | **Iteration 2** | **Database Schema, Constraints, RLS, Enums & Seed Data** | **Completed** |
 | **Iteration 3** | **Authentication, Roles, Profiles & Admin Verification (Supabase Auth)** | **Completed** |
-| **Iteration 4** | Pitch Decks, Private Storage Bucket & Short-Lived Signed URLs | Planned |
+| **Iteration 4** | **Startup Profiles, Team CRUD, Pitch Decks, Supabase Storage & Access Control** | **Completed** |
 | **Iteration 5** | Weighted Investor Matching Engine & Deal Pipeline | Planned |
 | **Iteration 6** | Mentorship Requests & Incubator Programs Lifecycle | Planned |
 
@@ -108,6 +108,54 @@
 6. **Testing Suite**:
    - Vitest suite expanded to 42 tests across 4 test suites (100% passing).
    - Full coverage for role registration, admin rejection, role escalation prevention, verified-only dealfeed access, audit logs, and token tamper/expiry defenses.
+
+---
+
+## Iteration 4 Details
+
+### Completed Deliverables
+1. **Database Schema Enhancements & Storage Setup**:
+   - Migration `20261027000004_startup_details_and_storage.sql`:
+     - Added `logo`, `sectors TEXT[]`, `problem`, `solution`, `target_market`, `business_model` to `startups` table.
+     - Added `payload JSONB` to `notifications` table for structured notification metadata.
+     - Created private Supabase Storage bucket `startup-documents` with strict RLS policies.
+   - Synchronized TypeScript interfaces in `backend/src/db/schema.types.ts` and `frontend/types/database.ts`.
+2. **Founder Startup & Team Member CRUD**:
+   - `POST /api/v1/startups`: creates startup with validation across all 11 core fields; automatically computes and returns `profile_completeness`.
+   - `GET /api/v1/me/startups`: lists founder's startups with computed completeness.
+   - `PATCH /api/v1/startups/:id` & `DELETE /api/v1/startups/:id`: owner-only permission enforcement with 403 Forbidden for non-owners.
+   - `GET`, `POST`, `PATCH`, `DELETE /api/v1/startups/:id/team-members`: team member CRUD with primary contact flag and owner authorization.
+3. **Profile Completeness Engine**:
+   - `computeProfileCompleteness(startup)`: dynamically evaluates 11 fields (`name`, `logo`, `tagline`, `sectors`, `stage`, `problem`, `solution`, `target_market`, `business_model`, `funding_ask`, `location`) returning 0-100 score.
+4. **Pitch Decks & Supabase Storage**:
+   - Multer middleware validating PDF-only mimetype and strict 10MB limit (`LIMIT_FILE_SIZE`).
+   - `POST /api/v1/startups/:id/documents`: uploads to `startup-documents` bucket and increments version per startup (`v1`, `v2`, ...).
+   - `GET /api/v1/startups/:id/documents`: lists documents according to caller permissions.
+   - `DELETE /api/v1/documents/:id`: owner-only document deletion from database and storage.
+5. **Access Control & 60-Second Signed URLs**:
+   - Three visibility rules enforced:
+     - `public`: any verified user can access; unverified users receive 403 `UNVERIFIED_ACCOUNT`.
+     - `access_controlled`: requires an approved access request (`POST /api/v1/documents/:id/access-requests`). Pending and declined requests are refused with 403 `ACCESS_REQUIRED`.
+     - `private`: owner & platform admin only; refused with 403 `ACCESS_DENIED`.
+   - Founder request list and decision actions: `POST /api/v1/document-access-requests/:id/approve` and `/decline`.
+   - `GET /api/v1/documents/:id/download`: generates signed URL valid for exactly 60 seconds (`expires_in: 60`).
+   - Notification service: `notify(userId, type, payload)` writes to `notifications` table on access request creation and founder decisions.
+6. **Frontend (Static to Dynamic Integration)**:
+   - **Founder My Startup Page**: dynamic profile editor with validation, 11-field form (logo, problem, solution, target market, business model, ask, stage, visibility), and team member management.
+   - **Pitch Deck & Documents Page**: upload modal with live progress bar, PDF validation, visibility selector, incrementing version badges (`v1`, `v2`), delete action, and working 60-second signed URL download.
+   - **Dashboard**: dynamic Profile Completeness progress bar (computed 0-100%) and interactive Deck Access Requests card with working Approve and Decline actions.
+   - `frontend/lib/api-client.ts`: added multipart `upload<T>` method with `FormData`.
+7. **Testing Suite**:
+   - 16 new automated tests in `backend/src/tests/iteration4.test.ts`:
+     - Unit tests for completeness calculation (0% to 100%).
+     - Owner-only edits and deletions (403 for non-owners).
+     - Full visibility matrix across all 5 roles (`founder`, `investor`, `mentor`, `incubator`, `admin`) and all 3 visibility states.
+     - PDF file type and 10MB size validation.
+     - Version incrementing on repeated uploads.
+     - Access requests, founder approve/decline lifecycle, and notification emission.
+     - 60-second signed URL verification.
+   - Total backend test suite: **70 tests passing** across 6 test files with zero failures.
+   - Frontend Next.js production build: compiles and generates static pages cleanly with zero TypeScript errors.
 
 ---
 

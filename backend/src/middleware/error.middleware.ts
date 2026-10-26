@@ -75,6 +75,27 @@ export function errorHandler(
     return;
   }
 
+  // Handle Multer upload errors
+  if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'MulterError') {
+    const multerErr = err as unknown as { code: string; message: string };
+    if (multerErr.code === 'LIMIT_FILE_SIZE') {
+      res.status(400).json({
+        error: {
+          code: 'FILE_TOO_LARGE',
+          message: 'File size exceeds 10MB limit',
+        },
+      });
+      return;
+    }
+    res.status(400).json({
+      error: {
+        code: 'UPLOAD_ERROR',
+        message: multerErr.message,
+      },
+    });
+    return;
+  }
+
   logger.error(
     { err, path: req.path, method: req.method, requestId: (req as any).id },
     'Unhandled internal server error'

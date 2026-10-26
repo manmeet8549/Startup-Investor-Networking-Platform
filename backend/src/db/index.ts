@@ -391,6 +391,145 @@ class InMemoryDatabase {
     return list;
   }
 
+  updateStartup(id: string, updates: Partial<Startup>): Startup | null {
+    const existing = this.startups.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.startups.set(id, updated);
+    return { ...updated };
+  }
+
+  deleteStartup(id: string): boolean {
+    return this.startups.delete(id);
+  }
+
+  listStartupsByFounder(founderId: string): Startup[] {
+    return Array.from(this.startups.values()).filter((s) => s.founder_id === founderId);
+  }
+
+  // --- Startup Team Members ---
+  createTeamMember(member: StartupTeamMember): StartupTeamMember {
+    const clone = {
+      ...member,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.startupTeamMembers.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  listTeamMembers(startupId: string): StartupTeamMember[] {
+    return Array.from(this.startupTeamMembers.values()).filter(
+      (m) => m.startup_id === startupId
+    );
+  }
+
+  getTeamMemberById(id: string): StartupTeamMember | null {
+    const member = this.startupTeamMembers.get(id);
+    return member ? { ...member } : null;
+  }
+
+  updateTeamMember(id: string, updates: Partial<StartupTeamMember>): StartupTeamMember | null {
+    const existing = this.startupTeamMembers.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.startupTeamMembers.set(id, updated);
+    return { ...updated };
+  }
+
+  deleteTeamMember(id: string): boolean {
+    return this.startupTeamMembers.delete(id);
+  }
+
+  // --- Documents ---
+  createDocument(doc: Document): Document {
+    const clone = {
+      ...doc,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.documents.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  getDocumentById(id: string): Document | null {
+    const doc = this.documents.get(id);
+    return doc ? { ...doc } : null;
+  }
+
+  listDocumentsByStartup(startupId: string): Document[] {
+    return Array.from(this.documents.values()).filter(
+      (d) => d.startup_id === startupId
+    );
+  }
+
+  deleteDocument(id: string): boolean {
+    return this.documents.delete(id);
+  }
+
+  getMaxDocumentVersion(startupId: string): number {
+    const docs = this.listDocumentsByStartup(startupId);
+    if (docs.length === 0) return 0;
+    return Math.max(...docs.map((d) => d.version || 1));
+  }
+
+  // --- Document Access Requests ---
+  createDocumentAccessRequest(req: DocumentAccessRequest): DocumentAccessRequest {
+    for (const existing of this.documentAccessRequests.values()) {
+      if (existing.document_id === req.document_id && existing.requester_id === req.requester_id) {
+        throw new Error('unique_document_access_request: access request already exists for this document and user');
+      }
+    }
+    const clone = {
+      ...req,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.documentAccessRequests.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  getDocumentAccessRequestById(id: string): DocumentAccessRequest | null {
+    const req = this.documentAccessRequests.get(id);
+    return req ? { ...req } : null;
+  }
+
+  findDocumentAccessRequest(documentId: string, requesterId: string): DocumentAccessRequest | null {
+    for (const req of this.documentAccessRequests.values()) {
+      if (req.document_id === documentId && req.requester_id === requesterId) {
+        return { ...req };
+      }
+    }
+    return null;
+  }
+
+  listDocumentAccessRequestsByStartup(startupId: string): DocumentAccessRequest[] {
+    return Array.from(this.documentAccessRequests.values()).filter(
+      (r) => r.startup_id === startupId
+    );
+  }
+
+  updateDocumentAccessRequest(id: string, updates: Partial<DocumentAccessRequest>): DocumentAccessRequest | null {
+    const existing = this.documentAccessRequests.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.documentAccessRequests.set(id, updated);
+    return { ...updated };
+  }
+
+
   // --- Applications with uniqueness constraint ---
   createApplication(app: Application): Application {
     // Constraint check: one application per startup per program
