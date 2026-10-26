@@ -91,6 +91,7 @@ export interface Startup {
   business_model?: string | null;
   pitch_deck_url: string | null;
   website: string | null;
+  is_hidden?: boolean;
   profile_completeness?: number;
   created_at: string;
   updated_at: string;

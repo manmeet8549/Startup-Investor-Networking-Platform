@@ -685,4 +685,149 @@ Generates a time-limited signed URL valid for **60 seconds** only.
 }
 ```
 
+---
+
+## Endpoints (Iteration 5: Discovery, Search & Filters)
+
+### 1. Startup Discovery & Browsing
+
+#### `GET /api/v1/startups`
+Browses and searches listed startups with filtering, sorting, and pagination.
+- **Auth**: Optional. Accessible to both authenticated community members and unauthenticated public callers.
+- **Listing & Safety Guarantees**:
+  - Only returns **listed** startups:
+    - Visibility is `public` or `access_controlled`. Private startups (`visibility = 'private'`) are NEVER listed in discovery.
+    - Founder account must be verified / approved (`verification_status IN ('approved', 'verified')`). Unverified or pending founders' startups never appear.
+    - Not hidden by platform moderation (`is_hidden = false`).
+- **Query Parameters**:
+  - `q`: Full-text search keyword across startup name, tagline, description, problem, solution, sectors, location, and business model. Sanitized against SQL injection.
+  - `sector`: Sector filter. Supports single string, comma-delimited strings (`sector=AgriTech,Clean Energy`), or repeated params (`sector=AgriTech&sector=AI`).
+  - `stage`: Startup maturity stage (`idea`, `validation`, `mvp`, `early_traction`, `growth`).
+  - `location`: Case-insensitive substring match on startup location.
+  - `funding_min`: Numeric lower bound for `funding_ask`.
+  - `funding_max`: Numeric upper bound for `funding_ask`.
+  - `business_model`: Case-insensitive substring match on `business_model`.
+  - `sort`: Sorting order:
+    - `newest` (default): Created date descending (`created_at DESC`).
+    - `funding`: Funding ask descending (`funding_ask DESC`).
+    - `relevance`: Text match ranking score descending (`score DESC`), falling back to `created_at DESC`.
+  - `page`: 1-based page number (default: `1`).
+  - `limit`: Number of items per page (default: `20`, max: `100`).
+- **Response**: `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": "s0000000-0000-0000-0000-000000000001",
+      "name": "FarmSense",
+      "logo": "https://foundersden.network/logos/farmsense.png",
+      "tagline": "Practical intelligence for every farmer.",
+      "sectors": ["AgriTech", "Climate Tech"],
+      "stage": "mvp",
+      "funding_ask": 1500000,
+      "currency": "INR",
+      "location": "Ludhiana, Punjab, India",
+      "visibility": "access_controlled",
+      "has_access": false,
+      "profile_completeness": 100,
+      "created_at": "2026-10-24T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 48,
+    "total_pages": 3
+  }
+}
+```
+
+---
+
+### 2. Startup Detail (Public & Sensitive Views)
+
+#### `GET /api/v1/startups/:id`
+Retrieves startup detail view.
+- **Auth**: Optional (`optionalAuthenticate`).
+- **Access Rule Matrix**:
+  - **Private Startups (`visibility = 'private'`)**: Returns `403 Forbidden` unless the caller is the startup founder (owner) or platform admin.
+  - **Public Fields**: Name, logo, tagline, sectors, stage, funding_ask, currency, location, visibility, and profile_completeness are always returned.
+  - **Sensitive Fields (`problem`, `solution`, `target_market`, `business_model`)**:
+    - Returned if `visibility = 'public'`.
+    - Returned if the caller is the startup owner or admin.
+    - Returned if the caller has an **approved** document access request (`has_access = true`).
+    - **Redacted (null)** for public unauthenticated visitors or unapproved callers on `access_controlled` startups.
+- **Response**: `200 OK`
+```json
+{
+  "data": {
+    "id": "s0000000-0000-0000-0000-000000000001",
+    "name": "FarmSense",
+    "tagline": "Practical intelligence for every farmer.",
+    "sectors": ["AgriTech", "Climate Tech"],
+    "stage": "mvp",
+    "funding_ask": 1500000,
+    "currency": "INR",
+    "location": "Ludhiana, Punjab, India",
+    "visibility": "access_controlled",
+    "has_access": true,
+    "problem": "Northern farmers lack real-time soil moisture and direct mandi price discovery.",
+    "solution": "Affordable IoT sensor companion with multilingual WhatsApp price delivery.",
+    "target_market": "Over 1M northern smallholders farming 5-20 acres.",
+    "business_model": "Sensor lease + annual advisory subscription.",
+    "profile_completeness": 100
+  }
+}
+```
+
+---
+
+### 3. Discovery Filter Metadata
+
+#### `GET /api/v1/meta/sectors`
+Returns distinct startup sectors with active listed startup counts for filter controls.
+- **Auth**: None (Public)
+- **Response**: `200 OK`
+```json
+{
+  "data": [
+    { "sector": "AgriTech", "count": 18 },
+    { "sector": "Climate Tech", "count": 12 },
+    { "sector": "AI", "count": 9 },
+    { "sector": "HealthTech", "count": 6 }
+  ]
+}
+```
+
+#### `GET /api/v1/meta/stages`
+Returns distinct startup stages with active listed startup counts.
+- **Auth**: None (Public)
+- **Response**: `200 OK`
+```json
+{
+  "data": [
+    { "stage": "idea", "count": 5 },
+    { "stage": "validation", "count": 11 },
+    { "stage": "mvp", "count": 22 },
+    { "stage": "early_traction", "count": 8 },
+    { "stage": "growth", "count": 2 }
+  ]
+}
+```
+
+#### `GET /api/v1/meta/locations`
+Returns distinct startup locations with active listed startup counts.
+- **Auth**: None (Public)
+- **Response**: `200 OK`
+```json
+{
+  "data": [
+    { "location": "Ludhiana, Punjab, India", "count": 14 },
+    { "location": "Bengaluru, Karnataka, India", "count": 12 },
+    { "location": "Chandigarh, India", "count": 8 }
+  ]
+}
+```
+
+
 

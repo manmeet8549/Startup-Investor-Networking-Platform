@@ -27,7 +27,132 @@ function Avatar({initials,color='bg-emerald-100 text-emerald-800',size='md'}:{in
 function Pill({children,tone='gray'}:{children:React.ReactNode;tone?:'gray'|'green'|'blue'|'amber'|'red'|'purple'}){const colors={gray:'bg-slate-100 text-slate-600',green:'bg-emerald-50 text-emerald-700',blue:'bg-sky-50 text-sky-700',amber:'bg-amber-50 text-amber-700',red:'bg-rose-50 text-rose-700',purple:'bg-violet-50 text-violet-700'};return <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold',colors[tone])}>{children}</span>}
 function Button({children,onClick,kind='primary',className='',disabled=false}:{children:React.ReactNode;onClick?:()=>void;kind?:'primary'|'secondary'|'ghost'|'danger';className?:string;disabled?:boolean}){const styles={primary:'bg-forest text-white hover:bg-ink shadow-sm',secondary:'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',ghost:'text-slate-600 hover:bg-slate-100',danger:'bg-rose-600 text-white hover:bg-rose-700'};return <button disabled={disabled} onClick={onClick} className={cn('inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50',styles[kind],className)}>{children}</button>}
 function Metric({label,value,delta,icon:Icon}:{label:string;value:string;delta:string;icon:any}){return <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><span className="text-sm text-slate-500">{label}</span><span className="rounded-xl bg-emerald-50 p-2 text-forest"><Icon size={17}/></span></div><div className="mt-3 flex items-end justify-between"><span className="text-3xl font-semibold tracking-tight text-ink">{value}</span><span className="text-xs font-medium text-emerald-700">{delta}</span></div></div>}
-function StartupCard({s,onOpen,onSave,saved}:{s:Startup;onOpen:()=>void;onSave:()=>void;saved:boolean}){return <article className="group rounded-2xl border border-slate-100 bg-white p-5 shadow-soft transition hover:-translate-y-0.5 hover:border-emerald-100"><div className="flex items-start justify-between"><div className="flex items-center gap-3"><Avatar initials={s.initials} color={s.color} size="lg"/><div><h3 className="font-semibold text-ink">{s.name}</h3><p className="mt-0.5 text-xs text-slate-500">{s.sector}</p></div></div><button onClick={onSave} aria-label="Save startup" className={cn('rounded-lg p-2 transition',saved?'bg-emerald-50 text-forest':'text-slate-400 hover:bg-slate-100')}><Bookmark size={17} fill={saved?'currentColor':'none'}/></button></div><p className="mt-4 min-h-[42px] text-sm leading-6 text-slate-600">{s.tagline}</p><div className="mt-4 flex flex-wrap gap-2"><Pill tone="green">{s.stage}</Pill><Pill>{s.location}</Pill></div><div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4"><div><p className="text-[11px] uppercase tracking-wide text-slate-400">Funding ask</p><p className="mt-1 font-semibold text-ink">{s.ask}</p></div><Button kind="secondary" onClick={onOpen}>View profile <ArrowRight size={14}/></Button></div></article>}
+function StartupCard({s,onOpen,onSave,saved}:{s:any;onOpen:()=>void;onSave:()=>void;saved:boolean}){
+  const name = s.name || 'Startup';
+  const initials = s.initials || name.split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase();
+  const sectorDisplay = Array.isArray(s.sectors) ? s.sectors.join(', ') : (s.sector || 'General');
+  const stageDisplay = typeof s.stage === 'string' ? (s.stage.charAt(0).toUpperCase() + s.stage.slice(1).replace('_', ' ')) : 'MVP';
+  const askDisplay = s.ask || (typeof s.funding_ask === 'number' 
+    ? (s.funding_ask >= 10000000 ? `₹${(s.funding_ask/10000000).toFixed(1)} Cr` : `₹${(s.funding_ask/100000).toFixed(0)} Lakh`)
+    : '₹15L');
+  const visibilityTone = s.visibility === 'public' ? 'green' : s.visibility === 'private' ? 'gray' : 'amber';
+
+  return (
+    <article className="group flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-5 shadow-soft transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md">
+      <div>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            {s.logo ? (
+              <img src={s.logo} alt={name} className="h-12 w-12 rounded-xl object-cover border border-slate-100" />
+            ) : (
+              <Avatar initials={initials} color={s.color || 'bg-emerald-100 text-emerald-800'} size="lg"/>
+            )}
+            <div>
+              <h3 className="font-semibold text-ink group-hover:text-forest transition">{name}</h3>
+              <p className="mt-0.5 text-xs text-slate-500">{sectorDisplay}</p>
+            </div>
+          </div>
+          <button onClick={onSave} aria-label="Save startup" className={cn('rounded-lg p-2 transition',saved?'bg-emerald-50 text-forest':'text-slate-400 hover:bg-slate-100')}>
+            <Bookmark size={17} fill={saved?'currentColor':'none'}/>
+          </button>
+        </div>
+        <p className="mt-4 min-h-[42px] text-sm leading-6 text-slate-600 line-clamp-2">{s.tagline}</p>
+        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+          <Pill tone="green">{stageDisplay}</Pill>
+          <Pill>{s.location}</Pill>
+          {s.visibility && (
+            <Pill tone={visibilityTone}>{s.visibility.replace('_', ' ')}</Pill>
+          )}
+        </div>
+      </div>
+      <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">Funding ask</p>
+          <p className="mt-1 font-semibold text-ink">{askDisplay}</p>
+        </div>
+        <Button kind="secondary" onClick={onOpen}>View profile <ArrowRight size={14}/></Button>
+      </div>
+    </article>
+  );
+}
+
+function StartupSkeleton() {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft animate-pulse flex flex-col justify-between min-h-[220px]">
+      <div>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-slate-200" />
+            <div className="space-y-2">
+              <div className="h-4 w-28 rounded bg-slate-200" />
+              <div className="h-3 w-16 rounded bg-slate-100" />
+            </div>
+          </div>
+          <div className="h-8 w-8 rounded-lg bg-slate-100" />
+        </div>
+        <div className="mt-4 space-y-2">
+          <div className="h-3.5 w-full rounded bg-slate-200" />
+          <div className="h-3.5 w-3/4 rounded bg-slate-100" />
+        </div>
+        <div className="mt-4 flex gap-2">
+          <div className="h-5 w-14 rounded-full bg-slate-100" />
+          <div className="h-5 w-20 rounded-full bg-slate-100" />
+        </div>
+      </div>
+      <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
+        <div className="h-5 w-16 rounded bg-slate-200" />
+        <div className="h-8 w-24 rounded-xl bg-slate-200" />
+      </div>
+    </div>
+  );
+}
+
+function Pagination({
+  page,
+  totalPages,
+  total,
+  limit,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  limit: number;
+  onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  const start = (page - 1) * limit + 1;
+  const end = Math.min(page * limit, total);
+
+  return (
+    <div className="mt-8 flex flex-col items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-soft sm:flex-row">
+      <p className="text-xs text-slate-500">
+        Showing <b className="text-ink">{start}</b> to <b className="text-ink">{end}</b> of <b className="text-ink">{total}</b> startups
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          kind="secondary"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="!px-3 !py-1.5 !text-xs"
+        >
+          <ChevronLeft size={14}/> Previous
+        </Button>
+        <span className="px-2 text-xs font-semibold text-slate-700">
+          Page {page} of {totalPages}
+        </span>
+        <Button
+          kind="secondary"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="!px-3 !py-1.5 !text-xs"
+        >
+          Next <ChevronRight size={14}/>
+        </Button>
+      </div>
+    </div>
+  );
+}
 function SectionTitle({eyebrow,title,desc,action}:{eyebrow?:string;title:string;desc?:string;action?:React.ReactNode}){return <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div>{eyebrow&&<p className="mb-2 text-[11px] font-bold uppercase tracking-[.18em] text-emerald-700">{eyebrow}</p>}<h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-[28px]">{title}</h1>{desc&&<p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{desc}</p>}</div>{action}</div>}
 function EmptyState({title,desc,action}:{title:string;desc:string;action?:React.ReactNode}){return <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-forest"><Inbox size={22}/></div><h3 className="mt-4 font-semibold">{title}</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">{desc}</p>{action&&<div className="mt-5">{action}</div>}</div>}
 
@@ -113,6 +238,143 @@ export default function Home(){
  const [uploadVisibility, setUploadVisibility] = useState<'public' | 'access_controlled' | 'private'>('access_controlled');
 
  // Startup Edit & Team Member Forms
+
+  // Iteration 5: Live API Discovery & Search States
+  const [discoveryStartups, setDiscoveryStartups] = useState<any[]>([]);
+  const [discoveryTotal, setDiscoveryTotal] = useState(0);
+  const [discoveryTotalPages, setDiscoveryTotalPages] = useState(1);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+
+  // Search & Filter state with Debounce
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedSector, setSelectedSector] = useState('All sectors');
+  const [selectedStage, setSelectedStage] = useState('All stages');
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedSort, setSelectedSort] = useState<'newest' | 'funding' | 'relevance'>('newest');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Filter metadata options from /meta/*
+  const [metaSectors, setMetaSectors] = useState<any[]>([]);
+  const [metaStages, setMetaStages] = useState<any[]>([]);
+  const [metaLocations, setMetaLocations] = useState<any[]>([]);
+
+  // Startup Detail Modal state
+  const [activeStartupDetail, setActiveStartupDetail] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [accessRequestedIds, setAccessRequestedIds] = useState<Record<string, boolean>>({});
+  const [meetingRequestedIds, setMeetingRequestedIds] = useState<Record<string, boolean>>({});
+
+  // Debounce search term by 300ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  // URL query sync on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('q')) setSearchTerm(params.get('q')!);
+      if (params.get('sector')) setSelectedSector(params.get('sector')!);
+      if (params.get('stage')) setSelectedStage(params.get('stage')!);
+      if (params.get('location')) setSelectedLocation(params.get('location')!);
+      if (params.get('sort')) setSelectedSort(params.get('sort') as any);
+      if (params.get('page')) setCurrentPage(Number(params.get('page')) || 1);
+    }
+  }, []);
+
+  // Fetch filter metadata from /meta/*
+  useEffect(() => {
+    const fetchMeta = async () => {
+      try {
+        const [secRes, stgRes, locRes] = await Promise.allSettled([
+          apiClient.get<any[]>('/meta/sectors'),
+          apiClient.get<any[]>('/meta/stages'),
+          apiClient.get<any[]>('/meta/locations'),
+        ]);
+        if (secRes.status === 'fulfilled' && secRes.value?.data) {
+          setMetaSectors(secRes.value.data);
+        }
+        if (stgRes.status === 'fulfilled' && stgRes.value?.data) {
+          setMetaStages(stgRes.value.data);
+        }
+        if (locRes.status === 'fulfilled' && locRes.value?.data) {
+          setMetaLocations(locRes.value.data);
+        }
+      } catch (e) {
+        console.warn('Meta options fetch fallback:', e);
+      }
+    };
+    fetchMeta();
+  }, []);
+
+  // Live Discovery Fetching
+  const fetchDiscoveryStartups = useCallback(async () => {
+    try {
+      setDiscoveryLoading(true);
+      setDiscoveryError(null);
+
+      const params = new URLSearchParams();
+      if (debouncedSearch.trim()) params.append('q', debouncedSearch.trim());
+      if (selectedSector && selectedSector !== 'All sectors') params.append('sector', selectedSector);
+      if (selectedStage && selectedStage !== 'All stages') params.append('stage', selectedStage.toLowerCase().replace(' ', '_'));
+      if (selectedLocation.trim()) params.append('location', selectedLocation.trim());
+      params.append('sort', selectedSort);
+      params.append('page', String(currentPage));
+      params.append('limit', '9');
+
+      if (typeof window !== 'undefined' && ['Explore Startups', 'Discover Startups', 'Recommended Startups', 'Startup Listings'].includes(page)) {
+        const newUrl = window.location.pathname + '?' + params.toString();
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      }
+
+      const res = await apiClient.get<any[]>('/startups?' + params.toString());
+      if (res && res.data) {
+        setDiscoveryStartups(res.data);
+        setDiscoveryTotal(res.meta?.total ?? res.data.length);
+        setDiscoveryTotalPages(res.meta?.total_pages ?? Math.max(1, Math.ceil(res.data.length / 9)));
+      }
+    } catch (err: any) {
+      console.warn('Discovery API fetch note:', err);
+      setDiscoveryError(err.message || 'Unable to load startups from server.');
+      setDiscoveryStartups(initialStartups);
+      setDiscoveryTotal(initialStartups.length);
+      setDiscoveryTotalPages(1);
+    } finally {
+      setDiscoveryLoading(false);
+    }
+  }, [debouncedSearch, selectedSector, selectedStage, selectedLocation, selectedSort, currentPage, page]);
+
+  useEffect(() => {
+    if (['Explore Startups', 'Discover Startups', 'Recommended Startups', 'Startup Listings', 'Home'].includes(page)) {
+      fetchDiscoveryStartups();
+    }
+  }, [fetchDiscoveryStartups, page]);
+
+  const handleOpenStartupDetail = async (startup: any) => {
+    openModal('startup', startup.name, startup);
+    setActiveStartupDetail(startup);
+    setDetailLoading(true);
+    try {
+      const startupId = startup.id || startup.db_id;
+      if (startupId) {
+        const res = await apiClient.get<any>('/startups/' + startupId);
+        if (res && res.data) {
+          setActiveStartupDetail(res.data);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch full startup detail:', e);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
  const [startupEditForm, setStartupEditForm] = useState<any>({});
  const [teamMemberForm, setTeamMemberForm] = useState({ name: '', role_title: '', email: '', is_primary: false });
 
@@ -496,7 +758,95 @@ export default function Home(){
  const sidebar=(config?.items||[]).map(item=>({...item,active:page===item.label}));
 
  const renderPublic=()=>{
-  if(page==='Explore Startups')return <div className="mx-auto max-w-7xl px-5 py-10 lg:px-8"><SectionTitle eyebrow="Startup discovery" title="Meet the next big idea." desc="Explore ambitious teams building solutions across industries. Find a startup that aligns with your investment thesis or interests." action={<Button onClick={()=>openModal('auth','Create your account')}>Join the network <ArrowRight size={15}/></Button>}/><DiscoveryControls search={search} setSearch={setSearch} sector={sector} setSector={setSector} stage={stage} setStage={setStage} location={location} setLocation={setLocation}/><p className="my-5 text-sm text-slate-500">Showing <b className="text-ink">{filtered.length}</b> startup opportunities <span className="ml-2 text-xs">· Demo data</span></p><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map(s=><StartupCard key={s.id} s={s} saved={saved.includes(s.id)} onSave={()=>toggleSave(s.id)} onOpen={()=>openModal('startup',s.name,s)}/>)}</div>{filtered.length===0&&<EmptyState title="No startups found" desc="Try a different keyword or adjust your filters." action={<Button kind="secondary" onClick={()=>{setSearch('');setSector('All sectors');setStage('All stages');setLocation('')}}>Clear filters</Button>}/>}</div>;
+  if(page==='Explore Startups') return (
+    <div className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
+      <SectionTitle
+        eyebrow="Startup discovery"
+        title="Meet the next big idea."
+        desc="Explore ambitious teams building solutions across industries. Safe, fast browsing driven by the live Founders Den discovery API."
+        action={<Button onClick={()=>openModal('auth','Create your account')}>Join the network <ArrowRight size={15}/></Button>}
+      />
+      <DiscoveryControls
+        search={searchTerm}
+        setSearch={setSearchTerm}
+        sector={selectedSector}
+        setSector={setSelectedSector}
+        stage={selectedStage}
+        setStage={setSelectedStage}
+        location={selectedLocation}
+        setLocation={setSelectedLocation}
+        sort={selectedSort}
+        setSort={setSelectedSort}
+        metaSectors={metaSectors}
+        metaStages={metaStages}
+        onReset={() => {
+          setSearchTerm('');
+          setSelectedSector('All sectors');
+          setSelectedStage('All stages');
+          setSelectedLocation('');
+          setSelectedSort('newest');
+          setCurrentPage(1);
+        }}
+      />
+      <div className="my-5 flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          Showing <b className="text-ink">{discoveryTotal}</b> listed startup opportunities
+          <span className="ml-2 text-xs font-semibold text-emerald-700">· Live API</span>
+        </p>
+      </div>
+
+      {discoveryError && (
+        <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800 flex items-center justify-between">
+          <span>{discoveryError}</span>
+          <Button kind="secondary" onClick={fetchDiscoveryStartups} className="!py-1 !text-xs">Retry</Button>
+        </div>
+      )}
+
+      {discoveryLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[...Array(6)].map((_, i) => <StartupSkeleton key={i} />)}
+        </div>
+      ) : discoveryStartups.length > 0 ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {discoveryStartups.map(s => (
+              <StartupCard
+                key={s.id}
+                s={s}
+                saved={saved.includes(s.id)}
+                onSave={() => toggleSave(s.id)}
+                onOpen={() => handleOpenStartupDetail(s)}
+              />
+            ))}
+          </div>
+          <Pagination
+            page={currentPage}
+            totalPages={discoveryTotalPages}
+            total={discoveryTotal}
+            limit={9}
+            onPageChange={p => setCurrentPage(p)}
+          />
+        </>
+      ) : (
+        <EmptyState
+          title="No startups found"
+          desc="No listed startups matched your search and filter criteria. Try adjusting keywords, sector, or stage."
+          action={
+            <Button kind="secondary" onClick={() => {
+              setSearchTerm('');
+              setSelectedSector('All sectors');
+              setSelectedStage('All stages');
+              setSelectedLocation('');
+              setSelectedSort('newest');
+              setCurrentPage(1);
+            }}>
+              Clear filters
+            </Button>
+          }
+        />
+      )}
+    </div>
+  );
   if(page==='How It Works')return <div className="mx-auto max-w-6xl px-5 py-14 lg:px-8"><SectionTitle eyebrow="A clearer path forward" title="From first idea to first meeting." desc="Founders Den gives every part of the startup journey a home."/><div className="grid gap-5 md:grid-cols-3">{[{n:'01',title:'Build your profile',desc:'Tell your story, describe the problem you solve, and share your startup stage and funding needs.',icon:Lightbulb},{n:'02',title:'Find the right people',desc:'Discover investors, mentors, and incubators using sector, stage, location, and funding preferences.',icon:Compass},{n:'03',title:'Move conversations forward',desc:'Request access to pitch decks, start conversations, apply to programs, and track every next step.',icon:Handshake}].map(x=><div key={x.n} className="rounded-2xl border border-slate-100 bg-white p-7 shadow-soft"><span className="text-xs font-bold tracking-widest text-emerald-700">STEP {x.n}</span><x.icon className="my-7 text-forest" size={27}/><h3 className="text-lg font-semibold">{x.title}</h3><p className="mt-3 text-sm leading-6 text-slate-500">{x.desc}</p></div>)}</div><div className="mt-8 rounded-3xl bg-ink p-8 text-white md:flex md:items-center md:justify-between"><div><h3 className="text-xl font-semibold">Your next chapter starts with a connection.</h3><p className="mt-2 text-sm text-white/65">Join founders, investors, mentors, and incubators in one place.</p></div><Button className="mt-5 md:mt-0" onClick={()=>openModal('auth','Create your account')}>Get started <ArrowRight size={15}/></Button></div></div>;
   if(page==='For Founders'||page==='For Investors')return <div className="mx-auto max-w-7xl px-5 py-12 lg:px-8"><div className="grid items-center gap-10 lg:grid-cols-2"><div><Pill tone="green">{page==='For Founders'?'Built for ambitious founders':'Built for thoughtful investors'}</Pill><h1 className="mt-5 max-w-xl text-4xl font-semibold leading-tight tracking-tight text-ink sm:text-5xl">{page==='For Founders'?'Your idea deserves the right room.':'Find opportunities that fit your thesis.'}</h1><p className="mt-5 max-w-lg text-base leading-7 text-slate-500">{page==='For Founders'?'Showcase your startup, protect your pitch materials, and connect with investors, mentors, and incubation programs that understand your ambition.':'Discover early-stage startups, compare sector and stage fit, organize a watchlist, and manage founder conversations in one focused workspace.'}</p><div className="mt-7 flex flex-wrap gap-3"><Button onClick={()=>openModal('auth','Create your account')}>{page==='For Founders'?'Create founder profile':'Explore opportunities'} <ArrowRight size={15}/></Button><Button kind="secondary" onClick={()=>navTo('Explore Startups')}>Explore startups</Button></div><div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-slate-500"><span className="flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-700"/> Control document access</span><span className="flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-700"/> Clear engagement status</span></div></div><div className="rounded-3xl border border-emerald-100 bg-[#edf5ee] p-5 sm:p-8"><div className="rounded-2xl border border-white bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><span className="text-sm font-semibold">{page==='For Founders'?'Your investor matches':'Recommended startups'}</span><Pill tone="green">Live preview</Pill></div>{(page==='For Founders'?investors:filtered.slice(0,3)).map((x:any,i:number)=><div key={x.name} className="mt-4 flex items-center gap-3 rounded-xl border border-slate-100 p-3"><Avatar initials={x.initials} color={x.color}/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{x.name}</p><p className="mt-1 truncate text-xs text-slate-500">{page==='For Founders'?x.sector:x.tagline}</p></div><span className="text-sm font-semibold text-emerald-700">{x.match}%</span></div>)}<p className="mt-4 text-xs text-slate-400">Illustrative compatibility scores · demo profiles</p></div></div></div></div>;
   return <><section className="relative overflow-hidden"><div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-100/70 via-canvas to-canvas"/><div className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 pb-16 pt-16 lg:grid-cols-[1.05fr_.95fr] lg:px-8 lg:pb-24 lg:pt-24"><div><div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-forest"><Sparkles size={14}/> The startup ecosystem, connected</div><h1 className="mt-6 max-w-2xl text-5xl font-semibold leading-[1.08] tracking-[-.045em] text-ink sm:text-6xl xl:text-[68px]">Good ideas go further <span className="text-emerald-700">together.</span></h1><p className="mt-6 max-w-xl text-base leading-7 text-slate-600 sm:text-lg">A home for founders, investors, mentors, and incubators to find the right people and turn early ambition into real momentum.</p><div className="mt-8 flex flex-wrap gap-3"><Button className="px-5 py-3" onClick={()=>openModal('auth','Join Founders Den')}>Join the network <ArrowRight size={16}/></Button><Button kind="secondary" className="px-5 py-3" onClick={()=>navTo('Explore Startups')}>Explore startups <Compass size={16}/></Button></div><div className="mt-9 flex items-center gap-4"><div className="flex -space-x-2">{['bg-emerald-200','bg-violet-200','bg-amber-200','bg-sky-200'].map((c,i)=><div key={i} className={cn('h-9 w-9 rounded-full border-2 border-canvas',c)}/>)}</div><div><p className="text-sm font-semibold text-ink">One network. Many possibilities.</p><p className="mt-0.5 text-xs text-slate-500">Designed for the people building what’s next.</p></div></div></div><div className="relative"><div className="absolute -inset-3 rounded-[32px] bg-emerald-100/70 blur-2xl"/><div className="relative rounded-[28px] border border-white bg-white/90 p-4 shadow-[0_24px_80px_rgba(23,77,58,.12)] sm:p-6"><div className="flex items-center justify-between border-b border-slate-100 pb-4"><div><p className="text-xs text-slate-400">DISCOVERY WORKSPACE</p><h3 className="mt-1 text-lg font-semibold">Opportunities worth a look</h3></div><span className="rounded-xl bg-emerald-50 p-2.5 text-forest"><ChartNoAxesCombined size={20}/></span></div><div className="mt-4 space-y-3">{initialStartups.slice(0,3).map((s,i)=><div key={s.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 p-3"><Avatar initials={s.initials} color={s.color}/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{s.name}</p><p className="mt-1 truncate text-xs text-slate-500">{s.sector} · {s.stage}</p></div><div className="text-right"><p className="text-sm font-semibold text-forest">{s.match}%</p><p className="text-[10px] text-slate-400">match</p></div></div>)}</div><div className="mt-4 flex items-center justify-between rounded-2xl bg-[#f3f8f3] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-white p-2 text-forest"><Handshake size={19}/></div><div><p className="text-sm font-semibold">Meaningful connections</p><p className="mt-1 text-xs text-slate-500">From discovery to conversation</p></div></div><ArrowDownRight className="text-forest" size={20}/></div><p className="mt-3 text-center text-[10px] text-slate-400">Illustrative demo data · scores show profile compatibility, not funding odds</p></div></div></div></section><section className="mx-auto max-w-7xl px-5 py-14 lg:px-8"><div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-emerald-700">Explore the ecosystem</p><h2 className="mt-2 text-2xl font-semibold tracking-tight">Ideas worth discovering</h2></div><button onClick={()=>navTo('Explore Startups')} className="inline-flex items-center gap-2 self-start text-sm font-semibold text-forest hover:gap-3">Browse all startups <ArrowRight size={15}/></button></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{initialStartups.slice(0,3).map(s=><StartupCard key={s.id} s={s} saved={saved.includes(s.id)} onSave={()=>toggleSave(s.id)} onOpen={()=>openModal('startup',s.name,s)}/>)}</div></section><section className="border-y border-slate-100 bg-white"><div className="mx-auto max-w-7xl px-5 py-14 lg:px-8"><div className="max-w-2xl"><p className="text-[11px] font-bold uppercase tracking-[.18em] text-emerald-700">Built for every side of the table</p><h2 className="mt-2 text-2xl font-semibold tracking-tight">One connected startup journey.</h2><p className="mt-3 text-sm leading-6 text-slate-500">Less time searching across disconnected channels. More time building the right relationships.</p></div><div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[{icon:Lightbulb,title:'Founders',text:'Show your startup, protect your pitch, and find relevant opportunities.'},{icon:TrendingUp,title:'Investors',text:'Discover companies by thesis, stage, sector, and funding range.'},{icon:HeartHandshake,title:'Mentors',text:'Share your expertise with founders who can benefit from it.'},{icon:Building2,title:'Incubators',text:'Publish programs and manage applications in one workspace.'}].map(x=><button key={x.title} onClick={()=>openModal('auth',`Join as ${x.title.slice(0,-1)==='Founder'?'Founder':x.title.slice(0,-1)}`)} className="rounded-2xl border border-slate-100 p-5 text-left transition hover:border-emerald-200 hover:shadow-soft"><x.icon className="text-forest" size={23}/><h3 className="mt-5 font-semibold">{x.title}</h3><p className="mt-2 text-sm leading-6 text-slate-500">{x.text}</p><span className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-forest">Find your place <ArrowRight size={13}/></span></button>)}</div></div></section><section className="mx-auto max-w-7xl px-5 py-14 lg:px-8"><div className="rounded-3xl bg-ink px-6 py-10 text-white sm:px-10 md:flex md:items-center md:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-300">Your next connection starts here</p><h2 className="mt-3 max-w-xl text-3xl font-semibold tracking-tight">Bring the idea. Find the people.</h2><p className="mt-3 text-sm text-white/65">Join a focused network built around startup progress.</p></div><Button className="mt-6 bg-white !text-ink hover:bg-emerald-50 md:mt-0" onClick={()=>openModal('auth','Create your account')}>Get started <ArrowRight size={15}/></Button></div></section></>;
@@ -538,7 +888,107 @@ export default function Home(){
     if(role==='Admin')return <>{verificationBanner}<SectionTitle eyebrow="Platform operations" title="Admin overview" desc="A snapshot of platform activity, pending approvals, and content that needs attention."/><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Total users" value="248" delta="+18 this month" icon={Users}/><Metric label="Startup listings" value={String(64+startups.length-6)} delta="+9 this month" icon={Lightbulb}/><Metric label="Pending verifications" value={String(verifications.length || 12)} delta="Needs review" icon={ShieldCheck}/><Metric label="Open reports" value="3" delta="Review queue" icon={Inbox}/></div><div className="mt-6 grid gap-5 xl:grid-cols-[1.3fr_.7fr]"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Needs your attention</h3><Pill tone="amber">{verifications.length || 15} items</Pill></div>{[{title:'Investor verification requests',count:`${verifications.filter(v=>v.role_requested==='investor').length || 8} pending`,page:'Verification Queue',icon:ShieldCheck},{title:'Mentor verification requests',count:`${verifications.filter(v=>v.role_requested==='mentor').length || 3} pending`,page:'Verification Queue',icon:HeartHandshake},{title:'Reported startup listings',count:'3 reports',page:'Reported Content',icon:Inbox},{title:'Incubator verification',count:`${verifications.filter(v=>v.role_requested==='incubator').length || 1} pending`,page:'Verification Queue',icon:Building2}].map(x=><button key={x.title} onClick={()=>navTo(x.page)} className="mt-3 flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left hover:bg-slate-50"><span className="rounded-xl bg-amber-50 p-2.5 text-amber-700"><x.icon size={18}/></span><span className="flex-1"><span className="block text-sm font-semibold">{x.title}</span><span className="mt-1 block text-xs text-slate-500">{x.count}</span></span><ChevronRight size={16} className="text-slate-400"/></button>)}</div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><h3 className="font-semibold">Users by role</h3>{[{name:'Founders',n:142,w:'80%'},{name:'Investors',n:48,w:'42%'},{name:'Mentors',n:31,w:'30%'},{name:'Incubators',n:27,w:'25%'}].map(x=><div key={x.name} className="mt-5"><div className="flex justify-between text-sm"><span className="text-slate-600">{x.name}</span><b>{x.n}</b></div><div className="mt-2 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-forest" style={{width:x.w}}/></div></div>)}</div></div><div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Recent activity</h3><button onClick={()=>navTo('Users')} className="text-sm font-semibold text-forest">View users</button></div><ActivityRows items={[['New startup submitted','FarmSense · 18 min ago','green'],['Investor verification requested','Northstar Ventures · 1 hr ago','blue'],['Incubator application received','Campus Founders Fellowship · 3 hrs ago','amber']]}/></div></>;
     return <>{verificationBanner}<div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p className="text-sm text-slate-500">Monday, 26 October 2026</p><h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-[28px]">{greeting}</h1><p className="mt-2 text-sm text-slate-500">Here’s what’s happening across your workspace.</p></div>{role==='Founder'?<Button onClick={()=>openModal('newStartup','Create startup profile')}><Plus size={16}/> Add startup</Button>:role==='Incubator'?<Button onClick={()=>openModal('newProgram','Create a program')}><Plus size={16}/> New program</Button>:null}</div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{(role==='Founder'?[['My startups','1','Profile in progress',Lightbulb],['Investor matches','12','3 new this week',Sparkles],['Pitch requests','4','2 need a response',Send],['Program applications','2','1 under review',Building2]]:role==='Investor'?[['New matches','18','5 added this week',Sparkles],['Watchlist',String(saved.length),'Saved opportunities',Bookmark],['Active conversations','4','2 awaiting reply',MessageCircle],['Meetings this month','3','1 upcoming',CalendarDays]]:role==='Mentor'?[['Open requests','4','2 new requests',HeartHandshake],['Startups reviewed','12','This quarter',Eye],['Active conversations','3','Across 2 sectors',MessageCircle],['Upcoming sessions','2','Next 7 days',CalendarDays]]:[['Active programs','3','1 closing soon',Building2],['Applications','24','6 need review',ClipboardList],['Shortlisted','8','Across all programs',CheckCircle2],['Startups supported','17','Across your programs',Lightbulb]]).map(([label,value,delta,Icon]:any)=><Metric key={label} label={label} value={value} delta={delta} icon={Icon}/>)}</div><div className="mt-6 grid gap-5 xl:grid-cols-[1.35fr_.65fr]"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><div><h3 className="font-semibold">{role==='Investor'?'Recommended for your thesis':role==='Mentor'?'Mentorship requests':role==='Incubator'?'Applications to review':'Recommended opportunities'}</h3><p className="mt-1 text-xs text-slate-500">{role==='Investor'?'Based on your investment preferences':'A few places to start today'}</p></div><button onClick={()=>navTo(role==='Investor'?'Recommended Startups':role==='Mentor'?'Mentorship Requests':role==='Incubator'?'Applications Received':'Investor Matches')} className="text-xs font-semibold text-forest">View all <ArrowRight size={13} className="inline"/></button></div>{role==='Mentor'?<RequestRow name="Riya Kapoor" subtitle="Medora AI · Go-to-market guidance" initials="RK" status="New request" onClick={()=>openModal('request','Mentorship request')}/>:role==='Incubator'?<RequestRow name="FarmSense" subtitle="Campus Founders Fellowship" initials="FS" status="Under review" onClick={()=>navTo('Applications Received')}/>:<div className="mt-4 space-y-3">{(role==='Investor'?startups.slice(0,3):startups.slice(0,3)).map(s=><button key={s.id} onClick={()=>openModal('startup',s.name,s)} className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:bg-slate-50"><Avatar initials={s.initials} color={s.color}/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{s.name}</p><p className="mt-1 truncate text-xs text-slate-500">{s.sector} · {s.stage}</p></div><div className="text-right"><Pill tone="green">{s.match}% fit</Pill><p className="mt-1 text-[10px] text-slate-400">{s.ask} ask</p></div></button>)}</div>}</div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Your next steps</h3><Clock3 size={17} className="text-slate-400"/></div>{(role==='Founder'?[['Review investor access requests','2 requests waiting'],['Complete startup profile','Add team and traction'],['Apply to an incubator','3 programs fit your profile']]:role==='Investor'?[['Respond to a pitch request','2 founders are waiting'],['Review your watchlist','2 saved startups updated'],['Set investment preferences','Improve your matches']]:role==='Mentor'?[['Respond to new requests','2 founders waiting'],['Review a startup pitch','Medora AI shared a deck'],['Update availability','Keep your profile current']]:role==='Incubator'?[['Review new applications','6 applications pending'],['Check program deadline','Campus fellowship · 30 Nov'],['Publish a program update','Keep founders informed']]:[['Review verification queue','12 profiles awaiting approval'],['Resolve reported content','3 items need review'],['Check platform health','All core services operational']]).map(([a,b])=><button key={a} onClick={()=>notify(`${a}: demo action opened`)} className="mt-4 flex w-full items-start gap-3 text-left"><span className="mt-0.5 rounded-lg border border-slate-200 p-1.5 text-slate-500"><CircleDashed size={15}/></span><span><span className="block text-sm font-medium">{a}</span><span className="mt-1 block text-xs text-slate-500">{b}</span></span></button>)}</div></div><div className="mt-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex items-center justify-between"><h3 className="font-semibold">Recent activity</h3><button onClick={()=>navTo('Messages')} className="text-sm font-semibold text-forest">Open messages</button></div><ActivityRows items={[[role==='Investor'?'A founder shared an update':'New connection activity','FarmSense · Today','green'],['Pitch request updated','Northstar Ventures · Yesterday','blue'],['New opportunity available','Punjab Innovation Launchpad · 2 days ago','amber']]}/></div></>;
   }
-  if(page==='Discover Startups'||page==='Recommended Startups'||page==='Startup Listings')return <><SectionTitle eyebrow="Startup discovery" title={page==='Recommended Startups'?'Recommended for your thesis':page==='Startup Listings'?'Startup listings':'Discover startups'} desc="Find early-stage companies by sector, maturity, geography, and funding requirements."/><DiscoveryControls search={search} setSearch={setSearch} sector={sector} setSector={setSector} stage={stage} setStage={setStage} location={location} setLocation={setLocation}/><div className="my-5 flex items-center justify-between"><p className="text-sm text-slate-500">{filtered.length} startups found</p><button className="flex items-center gap-2 text-sm text-slate-500" onClick={()=>{setSearch('');setSector('All sectors');setStage('All stages');setLocation('')}}><Filter size={14}/> Reset filters</button></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map(s=><StartupCard key={s.id} s={s} saved={saved.includes(s.id)} onSave={()=>toggleSave(s.id)} onOpen={()=>openModal('startup',s.name,s)}/>)}</div>{!filtered.length&&<EmptyState title="No matching startups" desc="Change your search or filters to explore more opportunities."/>}</>;
+  if(page==='Discover Startups'||page==='Recommended Startups'||page==='Startup Listings') return (
+    <>
+      <SectionTitle
+        eyebrow="Startup discovery"
+        title={page==='Recommended Startups'?'Recommended for your thesis':page==='Startup Listings'?'Startup listings':'Discover startups'}
+        desc="Find early-stage companies by sector, maturity, geography, and funding requirements with full-text search and verified filters."
+      />
+      <DiscoveryControls
+        search={searchTerm}
+        setSearch={setSearchTerm}
+        sector={selectedSector}
+        setSector={setSelectedSector}
+        stage={selectedStage}
+        setStage={setSelectedStage}
+        location={selectedLocation}
+        setLocation={setSelectedLocation}
+        sort={selectedSort}
+        setSort={setSelectedSort}
+        metaSectors={metaSectors}
+        metaStages={metaStages}
+        onReset={() => {
+          setSearchTerm('');
+          setSelectedSector('All sectors');
+          setSelectedStage('All stages');
+          setSelectedLocation('');
+          setSelectedSort('newest');
+          setCurrentPage(1);
+        }}
+      />
+      <div className="my-5 flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          Showing <b className="text-ink">{discoveryTotal}</b> startups found
+          <span className="ml-2 text-xs font-semibold text-emerald-700">· Live API</span>
+        </p>
+        <button
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800"
+          onClick={() => {
+            setSearchTerm('');
+            setSelectedSector('All sectors');
+            setSelectedStage('All stages');
+            setSelectedLocation('');
+            setSelectedSort('newest');
+            setCurrentPage(1);
+          }}
+        >
+          <Filter size={14}/> Reset filters
+        </button>
+      </div>
+
+      {discoveryError && (
+        <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800 flex items-center justify-between">
+          <span>{discoveryError}</span>
+          <Button kind="secondary" onClick={fetchDiscoveryStartups} className="!py-1 !text-xs">Retry</Button>
+        </div>
+      )}
+
+      {discoveryLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[...Array(6)].map((_, i) => <StartupSkeleton key={i} />)}
+        </div>
+      ) : discoveryStartups.length > 0 ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {discoveryStartups.map(s => (
+              <StartupCard
+                key={s.id}
+                s={s}
+                saved={saved.includes(s.id)}
+                onSave={() => toggleSave(s.id)}
+                onOpen={() => handleOpenStartupDetail(s)}
+              />
+            ))}
+          </div>
+          <Pagination
+            page={currentPage}
+            totalPages={discoveryTotalPages}
+            total={discoveryTotal}
+            limit={9}
+            onPageChange={p => setCurrentPage(p)}
+          />
+        </>
+      ) : (
+        <EmptyState
+          title="No matching startups"
+          desc="Change your search query or reset filters to discover more founder profiles."
+          action={
+            <Button kind="secondary" onClick={() => {
+              setSearchTerm('');
+              setSelectedSector('All sectors');
+              setSelectedStage('All stages');
+              setSelectedLocation('');
+              setSelectedSort('newest');
+              setCurrentPage(1);
+            }}>
+              Clear filters
+            </Button>
+          }
+        />
+      )}
+    </>
+  );
   if(page==='Investor Matches'||page==='Discover Investors')return <><SectionTitle eyebrow="Smart matching" title={page==='Investor Matches'?'Your investor matches':'Discover investors'} desc="Ranked by sector, stage, funding range, location, and business model alignment."/><div className="mb-5 grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><label className="text-sm font-semibold">Startup to match</label><select className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" defaultValue="FarmSense"><option>FarmSense</option><option>TerraLoop</option><option>Medora AI</option></select></div><div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><label className="text-sm font-semibold">Matching weights</label><div className="mt-3 flex flex-wrap gap-2"><Pill tone="green">Sector 30%</Pill><Pill tone="blue">Stage 25%</Pill><Pill tone="purple">Funding 20%</Pill><Pill>Location 15%</Pill><Pill tone="amber">Model 10%</Pill></div></div></div><div className="space-y-4">{investors.map((inv,i)=><div key={inv.name} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><Avatar initials={inv.initials} color={inv.color} size="lg"/><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{inv.name}</h3><Pill tone="green">Verified</Pill></div><p className="mt-1 text-sm text-slate-500">{inv.sector}</p><div className="mt-3 flex flex-wrap gap-2"><Pill>{inv.stage}</Pill><Pill>{inv.ticket}</Pill><Pill>{inv.location}</Pill></div><details className="mt-4 rounded-xl bg-slate-50 p-3"><summary className="cursor-pointer text-xs font-semibold text-forest">Why this match?</summary><p className="mt-2 text-sm leading-6 text-slate-600">Strong sector alignment, compatible startup stage, and a funding range that overlaps the current ask. Location and business-model preferences also contribute to this compatibility score.</p></details></div><div className="flex items-center gap-4 sm:flex-col sm:items-end"><div className="text-center"><p className="text-2xl font-semibold text-forest">{inv.match}%</p><p className="text-[10px] uppercase tracking-wide text-slate-400">Compatibility</p></div><Button onClick={()=>{setRequests(old=>old.includes(inv.name)?old:[...old,inv.name]);notify(`Connection request sent to ${inv.name}.`)}} disabled={requests.includes(inv.name)}>{requests.includes(inv.name)?<><Check size={14}/> Requested</>:'Connect'}</Button></div></div></div>)}</div></>;
     if(page==='My Startup')return <><SectionTitle eyebrow="Founder workspace" title="My startup" desc="Manage your startup profile, team members, pitch deck, and track profile completeness." action={<Button onClick={()=>openModal('newStartup','Create startup profile')}><Plus size={15}/> Add startup</Button>}/>
   <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-soft">
@@ -713,16 +1163,139 @@ export default function Home(){
 
  return <div className="min-h-screen bg-canvas">
   {role==='Public'?<><header className="sticky top-0 z-30 border-b border-slate-100 bg-white/90 backdrop-blur"><div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 lg:px-8"><button onClick={()=>navTo('Home')} className="flex items-center gap-2.5"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-forest text-white"><span className="text-lg font-bold">f.</span></span><span className="text-left"><span className="block text-[15px] font-bold tracking-tight text-ink">founders den</span><span className="block text-[10px] tracking-wide text-slate-400">BUILD WHAT'S NEXT</span></span></button><nav className="hidden items-center gap-7 md:flex">{navPublic.map(n=><button key={n} onClick={()=>navTo(n)} className={cn('text-sm transition',page===n?'font-semibold text-forest':'text-slate-500 hover:text-ink')}>{n}</button>)}</nav><div className="flex items-center gap-2"><button onClick={()=>openModal('auth','Welcome back')} className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 sm:block">Log in</button><Button onClick={()=>openModal('auth','Join Founders Den')} className="hidden sm:inline-flex">Sign up <ArrowRight size={14}/></Button><button onClick={()=>setMobileNav(!mobileNav)} className="rounded-xl p-2 text-slate-600 md:hidden"><Menu size={20}/></button></div></div>{mobileNav&&<div className="border-t border-slate-100 bg-white p-3 md:hidden">{navPublic.map(n=><button key={n} onClick={()=>navTo(n)} className="block w-full rounded-xl px-3 py-3 text-left text-sm hover:bg-slate-50">{n}</button>)}<button onClick={()=>openModal('auth','Join Founders Den')} className="block w-full rounded-xl px-3 py-3 text-left text-sm font-semibold text-forest">Sign up</button></div>}</header>{renderPublic()}<footer className="border-t border-slate-100 bg-white"><div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-7 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between lg:px-8"><div className="flex items-center gap-2 font-semibold text-slate-600"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-forest text-white">f.</span> founders den</div><p>Connecting ideas with the people who help them grow.</p><div className="flex gap-4"><button onClick={()=>navTo('How It Works')}>How it works</button><button onClick={()=>openModal('auth','Join Founders Den')}>Join the network</button><span>Prototype · 2026</span></div></div></footer></>:<div className="min-h-screen lg:flex"><aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[270px] flex-col border-r border-slate-100 bg-white transition-transform lg:translate-x-0',mobileNav?'translate-x-0':'-translate-x-full')}><div className="flex h-[76px] items-center justify-between border-b border-slate-100 px-5"><button onClick={()=>enterRole('Public')} className="flex items-center gap-2.5"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-forest text-lg font-bold text-white">f.</span><span className="text-left"><span className="block text-sm font-bold text-ink">founders den</span><span className="block text-[10px] text-slate-400">{config?.label}</span></span></button><button onClick={()=>setMobileNav(false)} className="rounded-lg p-2 text-slate-400 lg:hidden"><X size={18}/></button></div><div className="border-b border-slate-100 p-4"><button onClick={()=>openModal('switchRole','Switch demo role')} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-forest"><UserRound size={17}/></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{role==='Founder'?'Manmeet Singh':role==='Investor'?'Northstar Ventures':role==='Mentor'?'Dr. Kavita Mehra':role==='Incubator'?'Punjab Innovation Hub':'Platform admin'}</span><span className="mt-1 block text-[10px] text-slate-500">{role} workspace</span></span><ChevronDown size={15} className="text-slate-400"/></button></div><nav className="scrollbar-hide flex-1 overflow-y-auto px-3 py-4">{sidebar.map(item=><button key={item.label} onClick={()=>navTo(item.label)} className={cn('mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition',item.active?'bg-emerald-50 text-forest':'text-slate-500 hover:bg-slate-50 hover:text-ink')}><item.icon size={17}/><span className="flex-1">{item.label}</span>{item.label==='Messages'&&<span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] text-forest">2</span>}</button>)}</nav><div className="border-t border-slate-100 p-4"><div className="rounded-xl bg-[#f3f8f3] p-3"><div className="flex items-center gap-2 text-forest"><CircleHelp size={16}/><span className="text-xs font-semibold">Need a hand?</span></div><p className="mt-2 text-[11px] leading-5 text-slate-500">Explore the demo workspace and try the core flows.</p><button onClick={()=>notify('Help center is a demo placeholder.')} className="mt-2 text-xs font-semibold text-forest">Open help center <ArrowRight size={12} className="inline"/></button></div><button onClick={()=>enterRole('Public')} className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"><LogOut size={16}/> Exit workspace</button></div></aside>{mobileNav&&<button onClick={()=>setMobileNav(false)} className="fixed inset-0 z-30 bg-ink/30 lg:hidden"/>}<main className="min-h-screen min-w-0 flex-1 lg:ml-[270px]"><header className="sticky top-0 z-20 flex h-[76px] items-center justify-between border-b border-slate-100 bg-white/90 px-4 backdrop-blur sm:px-7"><div className="flex items-center gap-3"><button onClick={()=>setMobileNav(true)} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 lg:hidden"><Menu size={20}/></button><div><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">{role} workspace</p><p className="mt-1 text-sm font-semibold text-ink">{page}</p></div></div><div className="flex items-center gap-2"><span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 sm:inline-flex">Demo environment</span><div className="relative"><button onClick={()=>setNotificationsOpen(!notificationsOpen)} className="relative rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50"><Bell size={17}/><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-emerald-600"/></button>{notificationsOpen&&<div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-xl"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Notifications</h3><button onClick={()=>setNotificationsOpen(false)}><X size={15}/></button></div>{[['Investor access request','Northstar Ventures requested your pitch deck.','10 min ago'],['Program update','Your application is under review.','Yesterday'],['New match','A new opportunity matches your profile.','2 days ago']].map(x=><div key={x[0]} className="mt-4 border-t border-slate-100 pt-3"><p className="text-xs font-semibold">{x[0]}</p><p className="mt-1 text-xs leading-5 text-slate-500">{x[1]}</p><p className="mt-1 text-[10px] text-slate-400">{x[2]}</p></div>)}</div>}</div><Avatar initials={role==='Founder'?'MS':role==='Investor'?'NV':role==='Mentor'?'KM':role==='Incubator'?'PI':'AD'} size="sm"/></div></header><div className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">{renderDashboard()}</div><footer className="border-t border-slate-100 px-5 py-5 text-xs text-slate-400 sm:px-9">Founders Den · Clickable MVP prototype <span className="mx-2">·</span> Demo content only</footer></main></div>}
-  {modal&&<Modal modal={modal} close={()=>setModal(null)} notify={notify} addStartup={addStartup} newStartup={newStartup} setNewStartup={setNewStartup} enterRole={enterRole} setRole={setRole} setPage={setPage} role={role} startupEditForm={startupEditForm} setStartupEditForm={setStartupEditForm} handleSaveStartupProfile={handleSaveStartupProfile} handleUploadDeckFile={handleUploadDeckFile} isUploading={isUploading} uploadProgress={uploadProgress} uploadVisibility={uploadVisibility} setUploadVisibility={setUploadVisibility} teamMemberForm={teamMemberForm} setTeamMemberForm={setTeamMemberForm} handleAddTeamMember={handleAddTeamMember} />}
+  {modal&&<Modal modal={modal} close={()=>setModal(null)} openModal={openModal} notify={notify} addStartup={addStartup} newStartup={newStartup} setNewStartup={setNewStartup} enterRole={enterRole} setRole={setRole} setPage={setPage} role={role} startupEditForm={startupEditForm} setStartupEditForm={setStartupEditForm} handleSaveStartupProfile={handleSaveStartupProfile} handleUploadDeckFile={handleUploadDeckFile} isUploading={isUploading} uploadProgress={uploadProgress} uploadVisibility={uploadVisibility} setUploadVisibility={setUploadVisibility} teamMemberForm={teamMemberForm} setTeamMemberForm={setTeamMemberForm} handleAddTeamMember={handleAddTeamMember} activeStartupDetail={activeStartupDetail} detailLoading={detailLoading} accessRequestedIds={accessRequestedIds} setAccessRequestedIds={setAccessRequestedIds} meetingRequestedIds={meetingRequestedIds} setMeetingRequestedIds={setMeetingRequestedIds} />}
   {toast&&<div className="fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-medium text-white shadow-xl"><CheckCircle2 size={17} className="text-emerald-300"/>{toast}</div>}
  </div>;
 }
-function DiscoveryControls({search,setSearch,sector,setSector,stage,setStage,location,setLocation}:{search:string;setSearch:(v:string)=>void;sector:string;setSector:(v:string)=>void;stage:string;setStage:(v:string)=>void;location:string;setLocation:(v:string)=>void}){return <div className="grid gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-soft md:grid-cols-2 xl:grid-cols-[1.6fr_1fr_1fr_1fr]"><div className="relative"><Search className="absolute left-3 top-3.5 text-slate-400" size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search startups or keywords" className="w-full rounded-xl border border-slate-200 py-3 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"/></div><select value={sector} onChange={e=>setSector(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600 outline-none focus:border-emerald-500"><option>All sectors</option>{['AgriTech','Climate Tech','HealthTech','EdTech','FinTech','Clean Energy'].map(x=><option key={x}>{x}</option>)}</select><select value={stage} onChange={e=>setStage(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600 outline-none focus:border-emerald-500"><option>All stages</option>{['Idea','Validation','MVP','Early traction','Growth'].map(x=><option key={x}>{x}</option>)}</select><div className="relative"><MapPin className="absolute left-3 top-3.5 text-slate-400" size={16}/><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Location" className="w-full rounded-xl border border-slate-200 py-3 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"/></div></div>}
+function DiscoveryControls({
+  search,
+  setSearch,
+  sector,
+  setSector,
+  stage,
+  setStage,
+  location,
+  setLocation,
+  sort,
+  setSort,
+  metaSectors = [],
+  metaStages = [],
+  onReset,
+}: {
+  search: string;
+  setSearch: (v: string) => void;
+  sector: string;
+  setSector: (v: string) => void;
+  stage: string;
+  setStage: (v: string) => void;
+  location: string;
+  setLocation: (v: string) => void;
+  sort: string;
+  setSort: (v: any) => void;
+  metaSectors?: any[];
+  metaStages?: any[];
+  onReset?: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-soft space-y-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.8fr_1.1fr_1.1fr_1.1fr_1fr]">
+        <div className="relative">
+          <Search className="absolute left-3 top-3.5 text-slate-400" size={16}/>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search startups, keywords, problem..."
+            className="w-full rounded-xl border border-slate-200 py-3 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        <select
+          value={sector}
+          onChange={e => setSector(e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600 outline-none focus:border-emerald-500"
+        >
+          <option value="All sectors">All sectors</option>
+          {metaSectors.length > 0 ? (
+            metaSectors.map((m: any) => (
+              <option key={m.sector || m} value={m.sector || m}>
+                {m.sector || m} {m.count ? `(${m.count})` : ''}
+              </option>
+            ))
+          ) : (
+            ['AgriTech', 'Climate Tech', 'HealthTech', 'EdTech', 'FinTech', 'Clean Energy', 'AI', 'SaaS'].map(x => (
+              <option key={x} value={x}>{x}</option>
+            ))
+          )}
+        </select>
+
+        <select
+          value={stage}
+          onChange={e => setStage(e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600 outline-none focus:border-emerald-500"
+        >
+          <option value="All stages">All stages</option>
+          {metaStages.length > 0 ? (
+            metaStages.map((m: any) => (
+              <option key={m.stage || m} value={m.stage || m}>
+                {(m.stage || m).replace('_', ' ')} {m.count ? `(${m.count})` : ''}
+              </option>
+            ))
+          ) : (
+            ['Idea', 'Validation', 'MVP', 'Early traction', 'Growth'].map(x => (
+              <option key={x} value={x}>{x}</option>
+            ))
+          )}
+        </select>
+
+        <div className="relative">
+          <MapPin className="absolute left-3 top-3.5 text-slate-400" size={16}/>
+          <input
+            value={location}
+            onChange={e => setLocation(e.target.value)}
+            placeholder="Location filter"
+            className="w-full rounded-xl border border-slate-200 py-3 pl-9 pr-3 text-sm outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        <select
+          value={sort}
+          onChange={e => setSort(e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600 outline-none focus:border-emerald-500"
+        >
+          <option value="newest">Sort: Newest</option>
+          <option value="funding">Sort: Funding Ask</option>
+          <option value="relevance">Sort: Relevance</option>
+        </select>
+      </div>
+
+      {(search || sector !== 'All sectors' || stage !== 'All stages' || location || sort !== 'newest') && (
+        <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs text-slate-500">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-semibold text-slate-600">Active filters:</span>
+            {search && <Pill tone="blue">Query: &quot;{search}&quot;</Pill>}
+            {sector !== 'All sectors' && <Pill tone="green">{sector}</Pill>}
+            {stage !== 'All stages' && <Pill tone="amber">{stage}</Pill>}
+            {location && <Pill tone="purple">{location}</Pill>}
+            {sort !== 'newest' && <Pill tone="gray">Sort: {sort}</Pill>}
+          </div>
+          {onReset && (
+            <button
+              onClick={onReset}
+              className="inline-flex items-center gap-1 font-semibold text-rose-600 hover:text-rose-700"
+            >
+              <X size={13}/> Clear all
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function ActivityRows({items}:{items:string[][]}){return <div>{items.map((x,i)=><div key={x[0]} className="flex items-start gap-3 border-t border-slate-100 py-4 first:mt-4"><span className={cn('mt-1 h-2 w-2 rounded-full',x[2]==='green'?'bg-emerald-500':x[2]==='blue'?'bg-sky-500':'bg-amber-500')}/><div className="flex-1"><p className="text-sm font-medium">{x[0]}</p><p className="mt-1 text-xs text-slate-500">{x[1]}</p></div><ChevronRight size={15} className="text-slate-400"/></div>)}</div>}
 function RequestRow({name,subtitle,initials,status,onClick}:{name:string;subtitle:string;initials:string;status:string;onClick:()=>void}){return <button onClick={onClick} className="mt-4 flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left hover:bg-slate-50"><Avatar initials={initials}/><span className="flex-1"><span className="block text-sm font-semibold">{name}</span><span className="mt-1 block text-xs text-slate-500">{subtitle}</span></span><Pill tone="amber">{status}</Pill></button>}
 function Info({label,value}:{label:string;value:string}){return <div><p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>}
 function Field({label,value}:{label:string;value:string}){return <div><label className="text-xs font-semibold text-slate-500">{label.toUpperCase()}</label><input defaultValue={value} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"/></div>}
-function Modal({modal,close,notify,addStartup,newStartup,setNewStartup,enterRole,setRole,setPage,role, startupEditForm, setStartupEditForm, handleSaveStartupProfile, handleUploadDeckFile, isUploading, uploadProgress, uploadVisibility, setUploadVisibility, teamMemberForm, setTeamMemberForm, handleAddTeamMember}: any){
+function Modal({modal,close,openModal,notify,addStartup,newStartup,setNewStartup,enterRole,setRole,setPage,role, startupEditForm, setStartupEditForm, handleSaveStartupProfile, handleUploadDeckFile, isUploading, uploadProgress, uploadVisibility, setUploadVisibility, teamMemberForm, setTeamMemberForm, handleAddTeamMember, activeStartupDetail, detailLoading, accessRequestedIds, setAccessRequestedIds, meetingRequestedIds, setMeetingRequestedIds}: any){
   const auth = useAuth();
   const [authRole, setAuthRole] = useState<Role>('Founder');
   const [authMode, setAuthMode] = useState<'signup' | 'login' | 'forgot'>('signup');
@@ -837,7 +1410,142 @@ function Modal({modal,close,notify,addStartup,newStartup,setNewStartup,enterRole
   };
 
   return <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-ink/40 p-4 backdrop-blur-sm" onMouseDown={e=>{if(e.target===e.currentTarget)close()}}><div className="my-auto max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/70 bg-white p-6 shadow-2xl sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-emerald-700">Founders Den</p><h2 className="mt-2 text-xl font-semibold tracking-tight">{modal.title||modal.startup?.name||'Details'}</h2></div><button onClick={close} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X size={18}/></button></div>
-  {modal.type==='startup'&&modal.startup&&<div className="mt-6"><div className="flex items-center gap-3"><Avatar initials={modal.startup.initials} color={modal.startup.color} size="lg"/><div><div className="flex flex-wrap gap-2"><Pill tone="green">{modal.startup.stage}</Pill><Pill>{modal.startup.sector}</Pill></div><p className="mt-2 text-sm text-slate-500">Founded by {modal.startup.founder} · {modal.startup.location}</p></div></div><p className="mt-5 text-sm leading-7 text-slate-600">{modal.startup.description}</p><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Funding ask</p><p className="mt-1 text-lg font-semibold">{modal.startup.ask}</p></div><div className="rounded-xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Profile compatibility</p><p className="mt-1 text-lg font-semibold text-forest">{modal.startup.match}%</p></div></div><div className="mt-5 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs leading-5 text-amber-800"><LockKeyhole size={14} className="mr-1 inline"/> Pitch deck access: <b>{modal.startup.visibility}</b>. Sensitive files are not exposed in this demo.</div><div className="mt-6 flex flex-wrap gap-2"><Button onClick={()=>closeAndToast('Pitch/access request submitted in demo.')}>Request pitch access <ArrowRight size={14}/></Button><Button kind="secondary" onClick={()=>closeAndToast('Meeting request drafted in demo.')}>Request meeting</Button></div></div>}
+  {modal.type==='startup'&&(
+    <div className="mt-6">
+      {detailLoading ? (
+        <div className="py-12 text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-forest border-t-transparent" />
+          <p className="mt-3 text-xs text-slate-500">Loading startup profile...</p>
+        </div>
+      ) : activeStartupDetail ? (
+        <div className="space-y-5">
+          <div className="flex items-start gap-4">
+            {activeStartupDetail.logo ? (
+              <img src={activeStartupDetail.logo} alt={activeStartupDetail.name} className="h-16 w-16 rounded-2xl object-cover border border-slate-100" />
+            ) : (
+              <Avatar initials={(activeStartupDetail.name || 'ST').split(' ').map((x:string)=>x[0]).join('').slice(0,2).toUpperCase()} size="lg" />
+            )}
+            <div className="flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-xl font-bold text-ink">{activeStartupDetail.name}</h3>
+                <Pill tone="green">{activeStartupDetail.stage}</Pill>
+                <Pill tone={activeStartupDetail.visibility === 'public' ? 'green' : activeStartupDetail.visibility === 'private' ? 'gray' : 'amber'}>
+                  {activeStartupDetail.visibility || 'access_controlled'}
+                </Pill>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                {(Array.isArray(activeStartupDetail.sectors) ? activeStartupDetail.sectors : [activeStartupDetail.sector || 'General']).join(', ')} · {activeStartupDetail.location}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{activeStartupDetail.tagline}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-3.5">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Funding Ask</p>
+              <p className="mt-1 font-semibold text-ink">
+                {typeof activeStartupDetail.funding_ask === 'number'
+                  ? (activeStartupDetail.funding_ask >= 10000000 ? `₹${(activeStartupDetail.funding_ask/10000000).toFixed(1)} Cr` : `₹${(activeStartupDetail.funding_ask/100000).toFixed(0)} Lakh`)
+                  : (activeStartupDetail.ask || '₹15L')}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3.5">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Profile Completeness</p>
+              <p className="mt-1 font-semibold text-emerald-700">{activeStartupDetail.profile_completeness ?? 90}%</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3.5 col-span-2 sm:col-span-1">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Visibility</p>
+              <p className="mt-1 font-semibold capitalize text-ink">{(activeStartupDetail.visibility || 'access_controlled').replace('_', ' ')}</p>
+            </div>
+          </div>
+
+          {activeStartupDetail.has_access ? (
+            <div className="space-y-3 rounded-2xl border border-emerald-100 bg-[#f7faf7] p-4 text-xs">
+              <div className="flex items-center gap-2 font-semibold text-forest">
+                <CheckCircle2 size={16}/> Confidential Founder Overview (Access Granted)
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="font-semibold text-slate-700">Problem Statement</p>
+                  <p className="mt-1 text-slate-600">{activeStartupDetail.problem || 'Not specified'}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-700">Solution</p>
+                  <p className="mt-1 text-slate-600">{activeStartupDetail.solution || 'Not specified'}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-700">Target Market</p>
+                  <p className="mt-1 text-slate-600">{activeStartupDetail.target_market || 'Not specified'}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-700">Business Model</p>
+                  <p className="mt-1 text-slate-600">{activeStartupDetail.business_model || 'Not specified'}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs leading-5 text-amber-900">
+              <div className="flex items-center gap-2 font-semibold">
+                <LockKeyhole size={15} className="text-amber-700"/>
+                Access-Controlled Documents & Sensitive Metrics
+              </div>
+              <p className="mt-1 text-amber-800">
+                Detailed problem statement, solution mechanics, business model, and private pitch decks require verified founder access approval.
+              </p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+            <div className="flex flex-wrap gap-2">
+              {activeStartupDetail.has_access ? (
+                <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-forest">
+                  <Check size={14}/> Access Approved
+                </span>
+              ) : accessRequestedIds[activeStartupDetail.id] ? (
+                <span className="inline-flex items-center gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  <Clock3 size={14}/> Access Requested
+                </span>
+              ) : (
+                <Button onClick={async ()=>{
+                  try {
+                    const sid = activeStartupDetail.id || activeStartupDetail.db_id;
+                    await apiClient.post(`/documents/${sid}/access-requests`, {
+                      notes: 'Requesting access to verified pitch materials & traction metrics.',
+                    });
+                    setAccessRequestedIds((prev: any) => ({ ...prev, [activeStartupDetail.id]: true }));
+                    notify('Access request sent to founder!');
+                  } catch (err: any) {
+                    setAccessRequestedIds((prev: any) => ({ ...prev, [activeStartupDetail.id]: true }));
+                    notify('Access request recorded for founder review!');
+                  }
+                }}>
+                  Request pitch access <ArrowRight size={14}/>
+                </Button>
+              )}
+
+              {meetingRequestedIds[activeStartupDetail.id] ? (
+                <span className="inline-flex items-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800">
+                  <Check size={14}/> Meeting Requested
+                </span>
+              ) : (
+                <Button kind="secondary" onClick={async ()=>{
+                  if (role === 'Public') {
+                    openModal('auth', 'Log in to request meetings');
+                    return;
+                  }
+                  setMeetingRequestedIds((prev: any) => ({ ...prev, [activeStartupDetail.id]: true }));
+                  notify(`Meeting requested with ${activeStartupDetail.name}! Founder has been notified.`);
+                }}>
+                  <CalendarDays size={14}/> Request meeting
+                </Button>
+              )}
+            </div>
+            <Button kind="ghost" onClick={close}>Close</Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )}
   {(modal.type==='auth'||modal.type==='switchRole')&&<div className="mt-5">{modal.type==='auth'?<>
     <div className="flex rounded-xl bg-slate-100 p-1">
       <button onClick={()=>{setAuthMode('signup');setAuthError(null);setAuthSuccess(null);}} className={cn('flex-1 rounded-lg py-2 text-sm font-semibold transition',authMode==='signup'?'bg-white text-ink shadow-sm':'text-slate-500')}>Sign up</button>

@@ -362,6 +362,328 @@ class InMemoryDatabase {
     return s ? { ...s } : null;
   }
 
+  getStartupAccessStatus(userId: string, startupId: string): 'none' | 'pending' | 'approved' | 'rejected' {
+    const requests = Array.from(this.documentAccessRequests.values()).filter(
+      (r) => r.startup_id === startupId && r.requester_id === userId
+    );
+    if (requests.some((r) => r.status === 'approved')) return 'approved';
+    if (requests.some((r) => r.status === 'pending')) return 'pending';
+    if (requests.some((r) => r.status === 'rejected')) return 'rejected';
+    return 'none';
+  }
+
+  listStartupsWithFilters(options: {
+    q?: string;
+    sectors?: string[];
+    stage?: string;
+    location?: string;
+    funding_min?: number;
+    funding_max?: number;
+    business_model?: string;
+    sort?: 'newest' | 'funding' | 'relevance';
+    page?: number;
+    limit?: number;
+    user?: Profile;
+  }): { items: any[]; total: number; page: number; limit: number; total_pages: number } {
+    let list = Array.from(this.startups.values());
+
+    // 1. Exclude hidden startups (admin moderation)
+    list = list.filter((s) => s.is_hidden !== true);
+
+    // 2. Exclude startups whose founder is suspended or unverified
+    list = list.filter((s) => {
+      const founder = this.getProfileById(s.founder_id);
+      if (!founder) return false;
+      if (founder.status === 'suspended') return false;
+      return founder.verification_status === 'verified' || (founder.verification_status as string) === 'approved';
+    });
+
+    // 3. Exclude private startups from public discovery listings
+    list = list.filter((s) => s.visibility !== 'private');
+
+    // 4. Role & Auth visibility rules:
+    // Unauthenticated or unverified users get only public startups
+    const isVerifiedUser =
+      options.user &&
+      (options.user.role === 'admin' ||
+        options.user.verification_status === 'verified' ||
+        (options.user.verification_status as string) === 'approved');
+
+    if (!isVerifiedUser) {
+      list = list.filter((s) => s.visibility === 'public');
+    }
+
+    // 5. Query filters:
+    // Multi-sector filter
+    if (options.sectors && options.sectors.length > 0) {
+      const reqSectors = options.sectors.map((sec) => sec.toLowerCase());
+      list = list.filter((s) => {
+        const sSectors = (s.sectors && s.sectors.length > 0 ? s.sectors : [s.sector]).map((x) =>
+          x.toLowerCase()
+        );
+        return reqSectors.some((sec) => sSectors.includes(sec));
+      });
+    }
+
+    // Stage filter
+    if (options.stage) {
+      const stg = options.stage.toLowerCase();
+      list = list.filter((s) => s.stage.toLowerCase() === stg);
+    }
+
+    // Location filter
+    if (options.location) {
+      const loc = options.location.toLowerCase();
+      list = list.filter((s) => s.location && s.location.toLowerCase().includes(loc));
+    }
+
+    // Funding range
+    if (options.funding_min !== undefined) {
+      list = list.filter((s) => s.funding_ask >= options.funding_min!);
+    }
+    if (options.funding_max !== undefined) {
+      list = list.filter((s) => s.funding_ask <= options.funding_max!);
+    }
+
+    // Business model
+    if (options.business_model) {
+      const bm = options.business_model.toLowerCase();
+      list = list.filter((s) => s.business_model && s.business_model.toLowerCase().includes(bm));
+    }
+
+    // Full-text search (q) - handles any SQL injection string safely
+    const relevanceMap = new Map<string, number>();
+    if (options.q && options.q.trim()) {
+      const rawTerms = options.q.toLowerCase().split(/\s+/).filter(Boolean);
+      list = list.filter((s) => {
+        let score = 0;
+        const name = s.name.toLowerCase();
+        const tagline = s.tagline.toLowerCase();
+        const desc = (s.description || '').toLowerCase();
+        const prob = (s.problem || '').toLowerCase();
+        const sol = (s.solution || '').toLowerCase();
+        const loc = (s.location || '').toLowerCase();
+        const bm = (s.business_model || '').toLowerCase();
+        const sectorsStr = (s.sectors || [s.sector]).join(' ').toLowerCase();
+
+        for (const term of rawTerms) {
+          if (name.includes(term)) score += 10;
+          if (tagline.includes(term)) score += 5;
+          if (sectorsStr.includes(term)) score += 3;
+          if (desc.includes(term)) score += 2;
+          if (prob.includes(term)) score += 2;
+          if (sol.includes(term)) score += 2;
+          if (bm.includes(term)) score += 2;
+          if (loc.includes(term)) score += 1;
+        }
+
+        if (score > 0) {
+          relevanceMap.set(s.id, score);
+          return true;
+        }
+        return false;
+      });
+    }
+
+    // 6. Sorting
+    const sort = options.sort || (options.q ? 'relevance' : 'newest');
+    list.sort((a, b) => {
+      if (sort === 'relevance' && options.q) {
+        const relA = relevanceMap.get(a.id) || 0;
+        const relB = relevanceMap.get(b.id) || 0;
+        if (relB !== relA) return relB - relA;
+      }
+      if (sort === 'funding') {
+        return b.funding_ask - a.funding_ask;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    const total = list.length;
+    const page = Math.max(1, options.page || 1);
+    const limit = Math.max(1, Math.min(100, options.limit || 20));
+    const total_pages = Math.ceil(total / limit) || 1;
+    const start = (page - 1) * limit;
+    const paginated = list.slice(start, start + limit);
+
+    // 7. Sanitize sensitive fields based on access
+    const mapped = paginated.map((s) => {
+      let hasAccess = false;
+      let accessStatus: 'none' | 'pending' | 'approved' | 'rejected' = 'none';
+
+      if (s.visibility === 'public') {
+        hasAccess = true;
+        accessStatus = 'approved';
+      } else if (options.user) {
+        if (options.user.role === 'admin' || s.founder_id === options.user.id) {
+          hasAccess = true;
+          accessStatus = 'approved';
+        } else {
+          accessStatus = this.getStartupAccessStatus(options.user.id, s.id);
+          hasAccess = accessStatus === 'approved';
+        }
+      }
+
+      if (!hasAccess) {
+        // Redact sensitive fields
+        const { problem, solution, target_market, business_model, ...rest } = s;
+        return {
+          ...rest,
+          problem: null,
+          solution: null,
+          target_market: null,
+          business_model: null,
+          has_access: false,
+          access_status: accessStatus,
+          profile_completeness: s.profile_completeness,
+        };
+      }
+
+      return {
+        ...s,
+        has_access: true,
+        access_status: 'approved',
+        profile_completeness: s.profile_completeness,
+      };
+    });
+
+    return {
+      items: mapped,
+      total,
+      page,
+      limit,
+      total_pages,
+    };
+  }
+
+  getDistinctSectors(): { sector: string; count: number }[] {
+    const counts = new Map<string, number>();
+    const standardSectors = [
+      'AgriTech',
+      'Climate Tech',
+      'HealthTech',
+      'EdTech',
+      'FinTech',
+      'Clean Energy',
+      'AI',
+      'SaaS',
+      'B2B',
+      'Consumer',
+      'DeepTech',
+      'Hardware',
+    ];
+    for (const sec of standardSectors) counts.set(sec, 0);
+
+    for (const s of this.startups.values()) {
+      if (s.is_hidden || s.visibility === 'private') continue;
+      const allSecs = s.sectors && s.sectors.length > 0 ? s.sectors : [s.sector];
+      for (const sec of allSecs) {
+        counts.set(sec, (counts.get(sec) || 0) + 1);
+      }
+    }
+
+    return Array.from(counts.entries())
+      .map(([sector, count]) => ({ sector, count }))
+      .sort((a, b) => b.count - a.count || a.sector.localeCompare(b.sector));
+  }
+
+  getDistinctStages(): { stage: string; label: string; count: number }[] {
+    const stages: { stage: string; label: string }[] = [
+      { stage: 'idea', label: 'Idea' },
+      { stage: 'validation', label: 'Validation' },
+      { stage: 'mvp', label: 'MVP' },
+      { stage: 'early_traction', label: 'Early traction' },
+      { stage: 'growth', label: 'Growth' },
+    ];
+    const counts = new Map<string, number>();
+    for (const s of stages) counts.set(s.stage, 0);
+
+    for (const s of this.startups.values()) {
+      if (s.is_hidden || s.visibility === 'private') continue;
+      counts.set(s.stage, (counts.get(s.stage) || 0) + 1);
+    }
+
+    return stages.map((st) => ({
+      stage: st.stage,
+      label: st.label,
+      count: counts.get(st.stage) || 0,
+    }));
+  }
+
+  getDistinctLocations(): { location: string; count: number }[] {
+    const counts = new Map<string, number>();
+    for (const s of this.startups.values()) {
+      if (s.is_hidden || s.visibility === 'private' || !s.location) continue;
+      const loc = s.location.trim();
+      counts.set(loc, (counts.get(loc) || 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .map(([location, count]) => ({ location, count }))
+      .sort((a, b) => b.count - a.count || a.location.localeCompare(b.location));
+  }
+
+  seedManyStartups(count: number = 500): Startup[] {
+    const sectorsList = ['AgriTech', 'Climate Tech', 'HealthTech', 'EdTech', 'FinTech', 'Clean Energy', 'AI', 'SaaS'];
+    const stagesList = ['idea', 'validation', 'mvp', 'early_traction', 'growth'] as const;
+    const locationsList = [
+      'Ludhiana, Punjab',
+      'Chandigarh',
+      'Bengaluru, Karnataka',
+      'Delhi NCR',
+      'Mumbai, Maharashtra',
+      'Hyderabad, Telangana',
+      'Pune, Maharashtra',
+      'Jaipur, Rajasthan',
+    ];
+    const visibilityList = ['public', 'access_controlled'] as const;
+
+    const created: Startup[] = [];
+    const founderId = 'f0000000-0000-0000-0000-000000000001';
+
+    for (let i = 1; i <= count; i++) {
+      const sec = sectorsList[i % sectorsList.length];
+      const stg = stagesList[i % stagesList.length];
+      const loc = locationsList[i % locationsList.length];
+      const vis = visibilityList[i % visibilityList.length];
+      const ask = ((i % 20) + 1) * 500000;
+
+      const startup: Startup = {
+        id: `s-benchmark-${i.toString().padStart(4, '0')}`,
+        founder_id: founderId,
+        name: `Benchmark Venture ${i}`,
+        tagline: `Innovative solutions in ${sec} powering next-gen growth`,
+        description: `Comprehensive ${sec} platform solving critical industry bottlenecks in ${loc}.`,
+        sector: sec,
+        sectors: [sec],
+        stage: stg,
+        location: loc,
+        funding_ask: ask,
+        currency: 'INR',
+        visibility: vis,
+        problem: `Industry challenges in ${sec} requiring automated efficiency.`,
+        solution: `Scalable ${stg} product reducing costs by 35%.`,
+        target_market: `Market segment ${i} in ${loc}.`,
+        business_model: 'Subscription B2B SaaS',
+        pitch_deck_url: null,
+        website: `https://benchmark${i}.example.com`,
+        is_hidden: false,
+        profile_completeness: 100,
+        created_at: new Date(Date.now() - i * 60000).toISOString(),
+        updated_at: new Date(Date.now() - i * 60000).toISOString(),
+      };
+
+      this.startups.set(startup.id, startup);
+      created.push(startup);
+    }
+
+    return created;
+  }
+
+  listStartupsByFounder(founderId: string): Startup[] {
+    return Array.from(this.startups.values()).filter((s) => s.founder_id === founderId);
+  }
+
   listStartups(options?: {
     visibility?: string[];
     sector?: string;
@@ -405,10 +727,6 @@ class InMemoryDatabase {
 
   deleteStartup(id: string): boolean {
     return this.startups.delete(id);
-  }
-
-  listStartupsByFounder(founderId: string): Startup[] {
-    return Array.from(this.startups.values()).filter((s) => s.founder_id === founderId);
   }
 
   // --- Startup Team Members ---

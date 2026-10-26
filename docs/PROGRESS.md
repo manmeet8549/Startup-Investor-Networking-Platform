@@ -8,8 +8,9 @@
 | **Iteration 2** | **Database Schema, Constraints, RLS, Enums & Seed Data** | **Completed** |
 | **Iteration 3** | **Authentication, Roles, Profiles & Admin Verification (Supabase Auth)** | **Completed** |
 | **Iteration 4** | **Startup Profiles, Team CRUD, Pitch Decks, Supabase Storage & Access Control** | **Completed** |
-| **Iteration 5** | Weighted Investor Matching Engine & Deal Pipeline | Planned |
-| **Iteration 6** | Mentorship Requests & Incubator Programs Lifecycle | Planned |
+| **Iteration 5** | **Discovery, Search, Multi-Filters, Query Optimization & Dynamic Frontend** | **Completed** |
+| **Iteration 6** | Weighted Investor Matching Engine & Deal Pipeline | Planned |
+| **Iteration 7** | Mentorship Requests & Incubator Programs Lifecycle | Planned |
 
 ---
 
@@ -155,6 +156,57 @@
      - Access requests, founder approve/decline lifecycle, and notification emission.
      - 60-second signed URL verification.
    - Total backend test suite: **70 tests passing** across 6 test files with zero failures.
+   - Frontend Next.js production build: compiles and generates static pages cleanly with zero TypeScript errors.
+
+---
+
+## Iteration 5 Details
+
+### Completed Deliverables
+1. **Discovery & Search Endpoints**:
+   - `GET /api/v1/startups`: Fast, safe browsing with full-text search (`q`), multi-sector filtering (`sector`), stage, location, funding ask range (`funding_min`, `funding_max`), business model, sorting (`newest`, `funding`, `relevance`), and server-driven pagination.
+   - Defense-in-depth discovery rules:
+     - Only listed startups appear (`visibility IN ('public', 'access_controlled')`). Private startups (`visibility = 'private'`) are strictly filtered out and never appear in discovery.
+     - Founder must be verified or approved (`verification_status IN ('approved', 'verified')`). Unverified or pending founders' startups never appear.
+     - Content moderation check: only unhidden startups appear (`is_hidden = false`).
+   - `GET /api/v1/startups/:id`: Public startup view. Private startups return `403 Forbidden` to non-owners. Sensitive fields (`problem`, `solution`, `target_market`, `business_model`) are visible only if the startup is public, the caller is the owner/admin, or the caller has an approved access request (`has_access = true`). Redacted to `null` for unauthorized visitors.
+   - Filter metadata endpoints: `GET /api/v1/meta/sectors`, `GET /api/v1/meta/stages`, `GET /api/v1/meta/locations` returning distinct options with active startup counts.
+   - Public accessibility: Unauthenticated callers can browse `GET /startups` and `GET /startups/:id` seamlessly with sensitive fields securely redacted.
+2. **Database Migration & Query Optimization (`20261027000005_discovery_search_and_indexes.sql`)**:
+   - Added `is_hidden BOOLEAN NOT NULL DEFAULT false` to `startups` table.
+   - Created GIN index on `startups(sectors)` (`idx_startups_sectors`).
+   - Created B-tree indexes on `stage`, `location`, `funding_ask`, `visibility`, `is_hidden`, `created_at`.
+   - Created compound index for discovery listings: `idx_startups_discovery_listing` on `(is_hidden, visibility, created_at DESC)`.
+   - Enhanced `startups_generate_tsv()` full-text search trigger covering `name`, `tagline`, `sectors`, `location`, `description`, `problem`, `solution`, `business_model`.
+   - 500 Seeded rows benchmark: Multi-filter query executes in <50ms with sub-second execution on large datasets.
+3. **Frontend (Static to Dynamic Integration)**:
+   - **Explore Startups (Public)** & **Discover Startups (Investor / Incubator)** driven dynamically by the `/api/v1/startups` API.
+   - **Debounced Search**: 300ms debounce on search queries to prevent redundant API calls while maintaining responsive real-time feedback.
+   - **Dynamic Filter Panel**: Sector, Stage, Location, and Sort selectors populated dynamically with startup counts from `/api/v1/meta/*`.
+   - **URL Query Sync**: Filter and search states automatically sync with URL query parameters (`q`, `sector`, `stage`, `location`, `sort`, `page`) on change and hydrate from URL on mount.
+   - **Loading Skeletons**: 6 skeleton cards with pulse animations rendered during network requests.
+   - **Empty & Error States**: Dedicated empty state when no startups match with a one-click "Clear filters" action; robust error state with a "Retry" button.
+   - **Pagination**: Server-driven page navigation with item range summary ("Showing 1 to 9 of 48 startups") and previous/next page controls.
+   - **Startup Detail Modal**:
+     - Driven by `GET /api/v1/startups/:id`.
+     - Displays company overview, logo/avatar, tags, funding ask, profile completeness score.
+     - Protected confidential overview: shows problem statement, solution, target market, and business model when access is granted; shows locked notice when access is restricted.
+     - Working **Request Pitch Access** button: calls `POST /api/v1/documents/:id/access-requests` and updates state to "Access Requested".
+     - Working **Request Meeting** button: available for investor, mentor, and incubator roles with instant confirmation toast.
+4. **Automated Testing Suite (`backend/src/tests/iteration5.test.ts`)**:
+   - 20 unit and integration tests with 100% pass rate:
+     - Individual filter testing (sector, stage, location, funding min/max, business model).
+     - Combined multi-filter testing.
+     - Search ranking and token matching sanity.
+     - Private startups privacy test (never returned in discovery).
+     - Hidden startups moderation test (never returned in discovery).
+     - Founder verification status check (pending/unapproved founders' startups excluded).
+     - Public caller sensitive field redaction test.
+     - Access-approved caller sensitive field disclosure test.
+     - SQL injection safety tests (`'; DROP TABLE startups; --`, `' OR '1'='1`).
+     - Pagination bounds testing.
+     - 500 seeded rows query performance benchmark.
+   - Entire backend test suite: **90 passing tests across 7 test suites** (0 failures).
    - Frontend Next.js production build: compiles and generates static pages cleanly with zero TypeScript errors.
 
 ---

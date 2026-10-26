@@ -13,6 +13,7 @@ import { dealRouter } from './routes/deal.routes.js';
 import { adminRouter } from './routes/admin.routes.js';
 import { startupRouter } from './routes/startup.routes.js';
 import { documentRouter } from './routes/document.routes.js';
+import { metaRouter } from './routes/meta.routes.js';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware.js';
 import { config } from './config.js';
 
@@ -79,6 +80,7 @@ apiRouter.use(dealRouter);
 apiRouter.use('/admin', adminRouter);
 apiRouter.use(startupRouter);
 apiRouter.use(documentRouter);
+apiRouter.use(metaRouter);
 
 app.use('/api/v1', apiRouter);
 

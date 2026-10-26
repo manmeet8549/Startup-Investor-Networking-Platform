@@ -77,3 +77,52 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   req.user = profile;
   next();
 }
+
+export async function optionalAuthenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    req.user = undefined;
+    return next();
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  let decoded: JwtPayload;
+  try {
+    decoded = jwt.verify(token, config.SUPABASE_JWT_SECRET) as JwtPayload;
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      return next(new AppError('Authentication token has expired', 401, 'TOKEN_EXPIRED'));
+    }
+    return next(new AppError('Invalid authentication token', 401, 'UNAUTHORIZED'));
+  }
+
+  const userId = decoded.sub;
+  if (!userId) {
+    return next(new AppError('Invalid token subject', 401, 'INVALID_TOKEN'));
+  }
+
+  let profile: Profile | null = null;
+
+  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+    const res = await query<Profile>('SELECT * FROM public.profiles WHERE id = $1 LIMIT 1', [userId]);
+    if (res.rows.length > 0) {
+      profile = res.rows[0];
+    }
+  } else {
+    profile = inMemoryDb.getProfileById(userId);
+  }
+
+  if (!profile) {
+    return next(new AppError('User profile not found in system', 401, 'USER_NOT_FOUND'));
+  }
+
+  if (profile.status === 'suspended') {
+    return next(new AppError('This user account has been suspended', 403, 'ACCOUNT_SUSPENDED'));
+  }
+
+  req.user = profile;
+  next();
+}
+

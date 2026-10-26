@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticate } from '../middleware/auth.middleware.js';
+import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware.js';
 import { requireRole } from '../middleware/rbac.middleware.js';
 import { validateBody } from '../middleware/validate.middleware.js';
 import { AppError } from '../middleware/error.middleware.js';
@@ -9,6 +9,7 @@ import {
   updateStartupSchema,
   teamMemberSchema,
   updateTeamMemberSchema,
+  startupFilterSchema,
 } from '../schemas/startup.schema.js';
 import * as startupService from '../services/startup.service.js';
 import * as documentService from '../services/document.service.js';
@@ -33,12 +34,21 @@ const upload = multer({
   },
 });
 
-// All startup endpoints require authentication
-startupRouter.use('/startups', authenticate);
+// 1. GET /startups - Fast, safe discovery search and filters (public and verified roles)
+startupRouter.get('/startups', optionalAuthenticate, async (req, res, next) => {
+  try {
+    const filter = startupFilterSchema.parse(req.query);
+    const result = await startupService.listStartups(filter, req.user);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
 
-// 1. POST /startups - Founder creates startup
+// 2. POST /startups - Founder creates startup (founder or admin only)
 startupRouter.post(
   '/startups',
+  authenticate,
   requireRole('founder', 'admin'),
   validateBody(createStartupSchema),
   async (req, res, next) => {
@@ -53,8 +63,8 @@ startupRouter.post(
   }
 );
 
-// 2. GET /startups/:id - Get startup details with profile completeness & visibility check
-startupRouter.get('/startups/:id', async (req, res, next) => {
+// 3. GET /startups/:id - Public/filtered startup details with access control
+startupRouter.get('/startups/:id', optionalAuthenticate, async (req, res, next) => {
   try {
     const startup = await startupService.getStartupById(req.params.id, req.user);
     res.status(200).json({
@@ -65,9 +75,10 @@ startupRouter.get('/startups/:id', async (req, res, next) => {
   }
 });
 
-// 3. PATCH /startups/:id - Update startup (owner or admin only)
+// 4. PATCH /startups/:id - Update startup (owner or admin only)
 startupRouter.patch(
   '/startups/:id',
+  authenticate,
   validateBody(updateStartupSchema),
   async (req, res, next) => {
     try {
@@ -86,8 +97,8 @@ startupRouter.patch(
   }
 );
 
-// 4. DELETE /startups/:id - Delete startup (owner or admin only)
-startupRouter.delete('/startups/:id', async (req, res, next) => {
+// 5. DELETE /startups/:id - Delete startup (owner or admin only)
+startupRouter.delete('/startups/:id', authenticate, async (req, res, next) => {
   try {
     await startupService.deleteStartup(req.params.id, req.user!.id, req.user!.role);
     res.status(200).json({
@@ -102,9 +113,10 @@ startupRouter.delete('/startups/:id', async (req, res, next) => {
 
 // --- Team Member Endpoints ---
 
-// 5. POST /startups/:id/team-members - Add team member (owner or admin only)
+// 6. POST /startups/:id/team-members - Add team member (owner or admin only)
 startupRouter.post(
   '/startups/:id/team-members',
+  authenticate,
   validateBody(teamMemberSchema),
   async (req, res, next) => {
     try {
@@ -138,6 +150,7 @@ startupRouter.get('/startups/:id/team-members', async (req, res, next) => {
 // 7. PATCH /startups/:id/team-members/:memberId - Update team member (owner or admin only)
 startupRouter.patch(
   '/startups/:id/team-members/:memberId',
+  authenticate,
   validateBody(updateTeamMemberSchema),
   async (req, res, next) => {
     try {
@@ -160,6 +173,7 @@ startupRouter.patch(
 // 8. DELETE /startups/:id/team-members/:memberId - Delete team member (owner or admin only)
 startupRouter.delete(
   '/startups/:id/team-members/:memberId',
+  authenticate,
   async (req, res, next) => {
     try {
       await startupService.deleteTeamMember(
@@ -184,6 +198,7 @@ startupRouter.delete(
 // 9. POST /startups/:id/documents - Upload pitch deck or document (PDF only, max 10MB, increments version)
 startupRouter.post(
   '/startups/:id/documents',
+  authenticate,
   upload.single('file'),
   async (req, res, next) => {
     try {
@@ -211,7 +226,7 @@ startupRouter.post(
 );
 
 // 10. GET /startups/:id/documents - List documents
-startupRouter.get('/startups/:id/documents', async (req, res, next) => {
+startupRouter.get('/startups/:id/documents', optionalAuthenticate, async (req, res, next) => {
   try {
     const docs = await documentService.listDocuments(req.params.id, req.user);
     res.status(200).json({
@@ -225,6 +240,7 @@ startupRouter.get('/startups/:id/documents', async (req, res, next) => {
 // 11. GET /startups/:id/document-access-requests - Founder lists access requests
 startupRouter.get(
   '/startups/:id/document-access-requests',
+  authenticate,
   async (req, res, next) => {
     try {
       const requests = await documentService.listStartupAccessRequests(
@@ -239,3 +255,4 @@ startupRouter.get(
     }
   }
 );
+

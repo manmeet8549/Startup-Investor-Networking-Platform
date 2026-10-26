@@ -66,7 +66,29 @@ export const reviewDocumentAccessRequestSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+export const startupFilterSchema = z.object({
+  q: z.string().optional(),
+  sector: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((val) => {
+      if (!val) return undefined;
+      if (Array.isArray(val)) return val;
+      return val.split(',').map((s) => s.trim()).filter(Boolean);
+    }),
+  stage: startupStageEnum.optional(),
+  location: z.string().optional(),
+  funding_min: z.coerce.number().min(0).optional(),
+  funding_max: z.coerce.number().min(0).optional(),
+  business_model: z.string().optional(),
+  sort: z.enum(['newest', 'funding', 'relevance']).default('newest'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export type CreateStartupInput = z.infer<typeof createStartupSchema>;
 export type UpdateStartupInput = z.infer<typeof updateStartupSchema>;
 export type TeamMemberInput = z.infer<typeof teamMemberSchema>;
 export type UpdateTeamMemberInput = z.infer<typeof updateTeamMemberSchema>;
+export type StartupFilterQuery = z.infer<typeof startupFilterSchema>;
+
