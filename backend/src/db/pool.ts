@@ -4,12 +4,15 @@ import { logger } from '../utils/logger.js';
 
 const { Pool } = pg;
 
+// Ensure sslmode parameter in connection string doesn't override our explicit SSL configuration
+const sanitizedConnectionString = config.DATABASE_URL.replace(/([?&])sslmode=[^&]*(&?)/g, (_match, p1, p2) => (p1 === '?' && p2 ? '?' : ''));
+
 export const pool = new Pool({
-  connectionString: config.DATABASE_URL,
+  connectionString: sanitizedConnectionString,
   ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 8000,
 });
 
 pool.on('error', (err) => {
