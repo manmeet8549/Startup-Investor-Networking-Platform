@@ -4,16 +4,15 @@ import { apiClient } from '../lib/api-client';
 import { useAuth } from '../context/AuthContext';
 import { ArrowDownRight, ArrowRight, Bell, Bookmark, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Clock3, Compass, FileText, Filter, Handshake, HeartHandshake, LayoutDashboard, Lightbulb, LogOut, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings, ShieldCheck, Sparkles, Users, X, MapPin, TrendingUp, CalendarDays, Eye, LockKeyhole, CheckCircle2, CircleDashed, SlidersHorizontal, Upload, Send, UserRound, PanelsTopLeft, GraduationCap, ChartNoAxesCombined, ExternalLink, Inbox, Trash2 } from 'lucide-react';
 
+import { 
+  type UiStartup as Startup, 
+  initialStartups, 
+  investors, 
+  programs 
+} from '../lib/mock-data';
+
 type Role = 'Public'|'Founder'|'Investor'|'Mentor'|'Incubator'|'Admin';
-type Startup = { id:number; name:string; tagline:string; sector:string; stage:string; location:string; ask:string; match:number; initials:string; color:string; description:string; visibility:string; founder:string };
-const initialStartups:Startup[] = [
- {id:1,name:'TerraLoop',tagline:'Turning agricultural waste into valuable materials.',sector:'Climate Tech',stage:'MVP',location:'Chandigarh, India',ask:'₹25L',match:94,initials:'TL',color:'bg-emerald-100 text-emerald-800',description:'A circular-economy platform converting crop residue into sustainable packaging materials.',visibility:'Access-controlled',founder:'Aarav Sharma'},
- {id:2,name:'Medora AI',tagline:'Earlier signals. Better healthcare outcomes.',sector:'HealthTech',stage:'Early traction',location:'Delhi, India',ask:'₹40L',match:88,initials:'MA',color:'bg-violet-100 text-violet-800',description:'AI-assisted workflows that help clinics identify patient follow-ups and care gaps.',visibility:'Public',founder:'Riya Kapoor'},
- {id:3,name:'FarmSense',tagline:'Practical intelligence for every farmer.',sector:'AgriTech',stage:'MVP',location:'Ludhiana, India',ask:'₹15L',match:86,initials:'FS',color:'bg-lime-100 text-lime-800',description:'A multilingual farm companion combining crop insights, local weather, and market access.',visibility:'Access-controlled',founder:'Manmeet Singh'},
- {id:4,name:'SkillSpring',tagline:'Project-based learning for emerging talent.',sector:'EdTech',stage:'Validation',location:'Pune, India',ask:'₹10L',match:81,initials:'SS',color:'bg-sky-100 text-sky-800',description:'A skills platform matching learners with practical projects from early-stage companies.',visibility:'Public',founder:'Ishita Rao'},
- {id:5,name:'LedgerLeaf',tagline:'Simple finance operations for small businesses.',sector:'FinTech',stage:'Idea',location:'Jaipur, India',ask:'₹8L',match:76,initials:'LL',color:'bg-amber-100 text-amber-800',description:'A lightweight cash-flow and invoice workspace designed for small business owners.',visibility:'Private',founder:'Kabir Mehta'},
- {id:6,name:'Gridwise',tagline:'Make local energy systems work smarter.',sector:'Clean Energy',stage:'Early traction',location:'Bengaluru, India',ask:'₹60L',match:72,initials:'GW',color:'bg-orange-100 text-orange-800',description:'Software for monitoring and optimizing distributed energy assets.',visibility:'Public',founder:'Neha Iyer'}
-];
+
 const roleConfig:Record<Exclude<Role,'Public'>,{label:string;sub:string;items:{label:string;icon:any}[]}>={
  Founder:{label:'Founder workspace',sub:'Build your next chapter',items:[{label:'Dashboard',icon:LayoutDashboard},{label:'My Startup',icon:Lightbulb},{label:'Pitch Deck & Documents',icon:FileText},{label:'Investor Matches',icon:Sparkles},{label:'Discover Investors',icon:Compass},{label:'Mentors',icon:HeartHandshake},{label:'Incubators & Applications',icon:Building2},{label:'Messages',icon:MessageCircle},{label:'Profile & Settings',icon:Settings}]},
  Investor:{label:'Investor workspace',sub:'Find your next opportunity',items:[{label:'Dashboard',icon:LayoutDashboard},{label:'Discover Startups',icon:Compass},{label:'Recommended Startups',icon:Sparkles},{label:'Watchlist & Notes',icon:Bookmark},{label:'Pipeline',icon:ChartNoAxesCombined},{label:'Meeting Requests',icon:CalendarDays},{label:'Messages',icon:MessageCircle},{label:'Investment Preferences',icon:SlidersHorizontal},{label:'Profile & Settings',icon:Settings}]},
@@ -21,8 +20,7 @@ const roleConfig:Record<Exclude<Role,'Public'>,{label:string;sub:string;items:{l
  Incubator:{label:'Incubator workspace',sub:'Discover and support founders',items:[{label:'Dashboard',icon:LayoutDashboard},{label:'My Programs',icon:Building2},{label:'Applications Received',icon:ClipboardList},{label:'Discover Startups',icon:Compass},{label:'Messages',icon:MessageCircle},{label:'Profile & Settings',icon:Settings}]},
  Admin:{label:'Admin console',sub:'Keep the ecosystem trusted',items:[{label:'Dashboard',icon:LayoutDashboard},{label:'Verification Queue',icon:ShieldCheck},{label:'Users',icon:Users},{label:'Startup Listings',icon:PanelsTopLeft},{label:'Reported Content',icon:Inbox},{label:'Platform Settings',icon:Settings}]}
 };
-const investors=[{name:'Northstar Ventures',sector:'AgriTech · Climate Tech',stage:'Pre-seed · Seed',ticket:'₹10L–₹50L',location:'India',match:96,initials:'NV',color:'bg-emerald-100 text-emerald-800'},{name:'Aster Angel Network',sector:'HealthTech · SaaS · AI',stage:'Idea · MVP · Seed',ticket:'₹5L–₹25L',location:'North India',match:89,initials:'AA',color:'bg-violet-100 text-violet-800'},{name:'Launchpad Capital',sector:'SaaS · FinTech · EdTech',stage:'MVP · Early traction',ticket:'₹20L–₹1Cr',location:'India',match:82,initials:'LC',color:'bg-sky-100 text-sky-800'}];
-const programs=[{name:'Punjab Innovation Launchpad',org:'Regional Incubation Network',sectors:'AgriTech, Climate, AI',deadline:'15 Nov 2026',benefit:'Mentorship · Prototyping · Demo day',status:'Applications open'},{name:'Campus Founders Fellowship',org:'University Innovation Hub',sectors:'All sectors · Student founders',deadline:'30 Nov 2026',benefit:'Founder coaching · ₹2L grant consideration',status:'Applications open'},{name:'Climate Impact Accelerator',org:'Green Futures Lab',sectors:'Climate Tech, Clean Energy',deadline:'08 Dec 2026',benefit:'Pilot partners · Impact advisory',status:'Applications open'}];
+
 const navPublic=['Home','Explore Startups','How It Works','For Founders','For Investors'];
 function cn(...s:string[]){return s.filter(Boolean).join(' ')}
 function Avatar({initials,color='bg-emerald-100 text-emerald-800',size='md'}:{initials:string;color?:string;size?:'sm'|'md'|'lg'}){return <div className={cn('flex shrink-0 items-center justify-center rounded-xl font-semibold',color,size==='sm'?'h-8 w-8 text-xs':size==='lg'?'h-14 w-14 text-base':'h-10 w-10 text-sm')}>{initials}</div>}

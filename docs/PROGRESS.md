@@ -5,7 +5,7 @@
 | Iteration | Focus Area | Status |
 |---|---|---|
 | **Iteration 1** | **Backend Scaffolding, DB Migrations, Auth, Profiles, Student Flag & Verification Queue** | **Completed** |
-| **Iteration 2** | Startup Profiles, Public Discovery, Filtering & Pagination | Planned |
+| **Iteration 2** | **Database Schema, Constraints, RLS, Enums & Seed Data** | **Completed** |
 | **Iteration 3** | **Authentication, Roles, Profiles & Admin Verification (Supabase Auth)** | **Completed** |
 | **Iteration 4** | Pitch Decks, Private Storage Bucket & Short-Lived Signed URLs | Planned |
 | **Iteration 5** | Weighted Investor Matching Engine & Deal Pipeline | Planned |
@@ -43,6 +43,41 @@
 5. **Documentation**:
    - `docs/API.md`: Detailed request/response schemas, status codes, and security requirements.
    - `docs/PROGRESS.md`: Tracking roadmap, completed features, assumptions, and known gaps.
+
+---
+
+## Iteration 2 Details
+
+### Completed Deliverables
+1. **PostgreSQL Enums & Schema Migration (`20261027000003_full_mvp_data_model.sql`)**:
+   - Enums: `user_role`, `verification_status` (`pending`, `approved`, `verified`, `rejected`, `suspended`), `startup_stage` (`idea`, `validation`, `mvp`, `early_traction`, `growth`), `visibility` (`public`, `access_controlled`, `private`), `request_status`, `pipeline_status` (`interested`, `meeting_requested`, `in_discussion`, `passed`, `follow_up`), `application_status` (`submitted`, `under_review`, `shortlisted`, `accepted`, `rejected`).
+   - Tables: `profiles`, `founder_profiles`, `investor_profiles`, `mentor_profiles`, `incubator_profiles`, `startups`, `startup_team_members`, `documents` (versioned), `document_access_requests`, `watchlist`, `investor_notes`, `investor_startup_status`, `pitch_requests`, `connections`, `messages`, `mentorship_requests`, `mentor_feedback`, `incubator_programs`, `applications`, `notifications`, `match_scores`, `reports`, `audit_logs`.
+2. **Constraints, Indexes & Full-Text Search**:
+   - Ticket range check: `CONSTRAINT check_ticket_range CHECK (ticket_min <= ticket_max)`.
+   - Relational uniqueness: `unique_program_startup_application`, `unique_watchlist_entry`, `unique_connection_pair`, `unique_investor_startup_note`.
+   - Distinct participants: `user_a_id != user_b_id` on connections, `sender_id != recipient_id` on messages.
+   - GIN indexes on array columns: `investor_profiles(sectors)`, `investor_profiles(stages)`, `investor_profiles(regions)`, `mentor_profiles(expertise)`, `incubator_programs(sectors)`.
+   - Full-text search `tsvector` with weighted trigger (`startups_generate_tsv()`) on name, tagline, sector, location, and description.
+   - `updated_at` automated triggers across all tables.
+3. **Row Level Security (RLS)**:
+   - Enabled RLS on all 23 database tables.
+   - Policies ensuring users manage own records, investor notes and watchlist are private to owner, messages are private to conversation participants, startups follow visibility rules, and admin has global bypass access.
+4. **Idempotent Reset & Seed Scripts**:
+   - `backend/src/db/seed-data.ts` and `backend/src/db/reset.ts`:
+     - 1 Platform Admin
+     - 3 Founders with 5 Startups (including FarmSense, an AgriTech MVP in Punjab asking ₹15 Lakh INR)
+     - 3 Investors with distinct ticket sizes and sector theses
+     - 2 Mentors with advisory expertise
+     - 2 Incubators with 3 active cohorts/programs
+     - Initial applications, documents, watchlist, investor notes, and messages
+   - Added npm scripts: `npm run db:reset` and `npm run db:seed`.
+5. **Shared TypeScript Types & Typed Mock Factories**:
+   - `backend/src/db/schema.types.ts`: Exhaustive TypeScript interfaces for all database tables and enums.
+   - `frontend/types/database.ts`: Synchronized database types for frontend consumption.
+   - `frontend/lib/mock-data.ts`: Typed mock data factories (`createMockStartup`, `createMockInvestor`, `createMockProgram`) wired into `frontend/app/page.tsx` without changing existing visual screens.
+6. **Automated Testing Suite**:
+   - `backend/src/tests/iteration2.test.ts` (12 tests covering clean reset, constraints, RLS policies, and seed data).
+   - Total backend tests expanded to 54 tests across 5 test suites (100% passing in ~1.4s).
 
 ---
 

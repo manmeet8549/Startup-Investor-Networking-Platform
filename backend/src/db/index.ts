@@ -10,108 +10,42 @@ import type {
   IncubatorProfile,
   AuditLog,
 } from './types.js';
+import type {
+  FounderProfile,
+  Startup,
+  StartupTeamMember,
+  Document,
+  DocumentAccessRequest,
+  WatchlistEntry,
+  InvestorNote,
+  InvestorStartupStatus,
+  PitchRequest,
+  Connection,
+  Message,
+  MentorshipRequest,
+  MentorFeedback,
+  IncubatorProgram,
+  Application,
+  Notification,
+  MatchScore,
+  Report,
+} from './schema.types.js';
+import {
+  seedProfiles,
+  seedFounderProfiles,
+  seedInvestorProfiles,
+  seedMentorProfiles,
+  seedIncubatorProfiles,
+  seedStartups,
+  seedIncubatorPrograms,
+  seedApplications,
+  seedDocuments,
+  seedWatchlist,
+  seedInvestorNotes,
+  seedMessages,
+} from './seed-data.js';
 
 const { Pool } = pg;
-
-// Seed data matching the prototype users for initial development and testing
-const initialProfiles: Profile[] = [
-  {
-    id: 'f0000000-0000-0000-0000-000000000001',
-    email: 'manmeet@foundersden.test',
-    full_name: 'Manmeet Singh',
-    role: 'founder',
-    is_student: true,
-    organization: 'FarmSense',
-    avatar_url: null,
-    bio: 'Building FarmSense: Practical intelligence for every farmer.',
-    location: 'Ludhiana, India',
-    website: 'https://farmsense.example.com',
-    status: 'active',
-    verification_status: 'verified',
-    created_at: new Date('2026-10-18T10:00:00Z').toISOString(),
-    updated_at: new Date('2026-10-18T10:00:00Z').toISOString(),
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000002',
-    email: 'riya@foundersden.test',
-    full_name: 'Riya Kapoor',
-    role: 'founder',
-    is_student: false,
-    organization: 'Medora AI',
-    avatar_url: null,
-    bio: 'Medora AI: Earlier signals. Better healthcare outcomes.',
-    location: 'Delhi, India',
-    website: 'https://medora.example.com',
-    status: 'active',
-    verification_status: 'verified',
-    created_at: new Date('2026-10-11T10:00:00Z').toISOString(),
-    updated_at: new Date('2026-10-11T10:00:00Z').toISOString(),
-  },
-  {
-    id: 'i0000000-0000-0000-0000-000000000001',
-    email: 'northstar@foundersden.test',
-    full_name: 'Northstar Ventures',
-    role: 'investor',
-    is_student: false,
-    organization: 'Northstar Ventures',
-    avatar_url: null,
-    bio: 'Early-stage investor focused on AgriTech, Climate Tech, and applied AI.',
-    location: 'India',
-    website: 'https://northstar.example.com',
-    status: 'active',
-    verification_status: 'pending',
-    created_at: new Date('2026-10-25T10:00:00Z').toISOString(),
-    updated_at: new Date('2026-10-25T10:00:00Z').toISOString(),
-  },
-  {
-    id: 'm0000000-0000-0000-0000-000000000001',
-    email: 'kavita@foundersden.test',
-    full_name: 'Dr. Kavita Mehra',
-    role: 'mentor',
-    is_student: false,
-    organization: 'Independent Advisor',
-    avatar_url: null,
-    bio: 'Startup strategy, Go-to-market and deep science mentoring.',
-    location: 'Chandigarh, India',
-    website: 'https://kavita.example.com',
-    status: 'active',
-    verification_status: 'pending',
-    created_at: new Date('2026-10-24T10:00:00Z').toISOString(),
-    updated_at: new Date('2026-10-24T10:00:00Z').toISOString(),
-  },
-  {
-    id: 'c0000000-0000-0000-0000-000000000001',
-    email: 'punjab@foundersden.test',
-    full_name: 'Punjab Innovation Hub',
-    role: 'incubator',
-    is_student: false,
-    organization: 'Punjab Innovation Hub',
-    avatar_url: null,
-    bio: 'Regional incubator backing campus innovators and early startups.',
-    location: 'Punjab, India',
-    website: 'https://punjabinnovation.example.com',
-    status: 'active',
-    verification_status: 'verified',
-    created_at: new Date('2026-10-12T10:00:00Z').toISOString(),
-    updated_at: new Date('2026-10-12T10:00:00Z').toISOString(),
-  },
-  {
-    id: 'a0000000-0000-0000-0000-000000000001',
-    email: 'admin@foundersden.test',
-    full_name: 'Platform Admin',
-    role: 'admin',
-    is_student: false,
-    organization: 'Founders Den Core',
-    avatar_url: null,
-    bio: 'Platform administration and ecosystem moderation.',
-    location: 'Global',
-    website: null,
-    status: 'active',
-    verification_status: 'verified',
-    created_at: new Date('2026-10-01T10:00:00Z').toISOString(),
-    updated_at: new Date('2026-10-01T10:00:00Z').toISOString(),
-  },
-];
 
 const initialVerificationRequests: VerificationRequest[] = [
   {
@@ -146,9 +80,27 @@ const initialVerificationRequests: VerificationRequest[] = [
 class InMemoryDatabase {
   profiles: Map<string, Profile> = new Map();
   verificationRequests: Map<string, VerificationRequest> = new Map();
+  founderProfiles: Map<string, FounderProfile> = new Map();
   investorProfiles: Map<string, InvestorProfile> = new Map();
   mentorProfiles: Map<string, MentorProfile> = new Map();
   incubatorProfiles: Map<string, IncubatorProfile> = new Map();
+  startups: Map<string, Startup> = new Map();
+  startupTeamMembers: Map<string, StartupTeamMember> = new Map();
+  documents: Map<string, Document> = new Map();
+  documentAccessRequests: Map<string, DocumentAccessRequest> = new Map();
+  watchlist: Map<string, WatchlistEntry> = new Map();
+  investorNotes: Map<string, InvestorNote> = new Map();
+  investorStartupStatus: Map<string, InvestorStartupStatus> = new Map();
+  pitchRequests: Map<string, PitchRequest> = new Map();
+  connections: Map<string, Connection> = new Map();
+  messages: Map<string, Message> = new Map();
+  mentorshipRequests: Map<string, MentorshipRequest> = new Map();
+  mentorFeedback: Map<string, MentorFeedback> = new Map();
+  incubatorPrograms: Map<string, IncubatorProgram> = new Map();
+  applications: Map<string, Application> = new Map();
+  notifications: Map<string, Notification> = new Map();
+  matchScores: Map<string, MatchScore> = new Map();
+  reports: Map<string, Report> = new Map();
   auditLogs: AuditLog[] = [];
 
   constructor() {
@@ -158,52 +110,116 @@ class InMemoryDatabase {
   reset() {
     this.profiles.clear();
     this.verificationRequests.clear();
+    this.founderProfiles.clear();
     this.investorProfiles.clear();
     this.mentorProfiles.clear();
     this.incubatorProfiles.clear();
+    this.startups.clear();
+    this.startupTeamMembers.clear();
+    this.documents.clear();
+    this.documentAccessRequests.clear();
+    this.watchlist.clear();
+    this.investorNotes.clear();
+    this.investorStartupStatus.clear();
+    this.pitchRequests.clear();
+    this.connections.clear();
+    this.messages.clear();
+    this.mentorshipRequests.clear();
+    this.mentorFeedback.clear();
+    this.incubatorPrograms.clear();
+    this.applications.clear();
+    this.notifications.clear();
+    this.matchScores.clear();
+    this.reports.clear();
     this.auditLogs = [];
 
-    for (const p of initialProfiles) {
-      this.profiles.set(p.id, { ...p });
+    // Seed canonical profiles
+    for (const p of seedProfiles) {
+      this.profiles.set(p.id, { ...p, status: p.status as any, verification_status: p.verification_status as any });
     }
+
+    // Seed role profiles
+    for (const fp of seedFounderProfiles) {
+      this.founderProfiles.set(fp.user_id, { ...fp });
+    }
+    for (const ip of seedInvestorProfiles) {
+      this.investorProfiles.set(ip.user_id, {
+        user_id: ip.user_id,
+        investment_thesis: ip.thesis || null,
+        ticket_size_min: ip.ticket_min,
+        ticket_size_max: ip.ticket_max,
+        preferred_sectors: ip.sectors,
+        preferred_stages: ip.stages,
+        preferred_locations: ip.regions,
+        created_at: ip.created_at,
+        updated_at: ip.updated_at,
+      });
+    }
+    for (const mp of seedMentorProfiles) {
+      this.mentorProfiles.set(mp.user_id, {
+        user_id: mp.user_id,
+        expertise_areas: mp.expertise,
+        years_of_experience: mp.experience,
+        mentoring_topics: ['Strategy', 'Pricing'],
+        linkedin_url: mp.linkedin_url || null,
+        created_at: mp.created_at,
+        updated_at: mp.updated_at,
+      });
+    }
+    for (const cp of seedIncubatorProfiles) {
+      this.incubatorProfiles.set(cp.user_id, {
+        user_id: cp.user_id,
+        organization_name: cp.organization_name || null,
+        website: cp.website || null,
+        program_types: cp.focus_sectors,
+        cohort_size: cp.cohort_size,
+        created_at: cp.created_at,
+        updated_at: cp.updated_at,
+      });
+    }
+
+    // Seed startups
+    for (const s of seedStartups) {
+      this.startups.set(s.id, { ...s });
+    }
+
+    // Seed incubator programs
+    for (const p of seedIncubatorPrograms) {
+      this.incubatorPrograms.set(p.id, { ...p });
+    }
+
+    // Seed applications
+    for (const a of seedApplications) {
+      this.applications.set(a.id, { ...a });
+    }
+
+    // Seed documents
+    for (const d of seedDocuments) {
+      this.documents.set(d.id, { ...d });
+    }
+
+    // Seed watchlist
+    for (const w of seedWatchlist) {
+      this.watchlist.set(w.id, { ...w });
+    }
+
+    // Seed investor notes
+    for (const n of seedInvestorNotes) {
+      this.investorNotes.set(n.id, { ...n });
+    }
+
+    // Seed messages
+    for (const m of seedMessages) {
+      this.messages.set(m.id, { ...m });
+    }
+
+    // Seed verification requests
     for (const v of initialVerificationRequests) {
       this.verificationRequests.set(v.id, { ...v });
     }
-
-    // Seed role profiles for initial users
-    this.investorProfiles.set('i0000000-0000-0000-0000-000000000001', {
-      user_id: 'i0000000-0000-0000-0000-000000000001',
-      investment_thesis: 'Early-stage climate, agriculture, and applied AI in India.',
-      ticket_size_min: 1000000,
-      ticket_size_max: 5000000,
-      preferred_sectors: ['AgriTech', 'Climate Tech', 'AI'],
-      preferred_stages: ['Pre-seed', 'Seed'],
-      preferred_locations: ['India'],
-      created_at: new Date('2026-10-25T10:00:00Z').toISOString(),
-      updated_at: new Date('2026-10-25T10:00:00Z').toISOString(),
-    });
-
-    this.mentorProfiles.set('m0000000-0000-0000-0000-000000000001', {
-      user_id: 'm0000000-0000-0000-0000-000000000001',
-      expertise_areas: ['Startup strategy', 'Go-to-market', 'Deep science'],
-      years_of_experience: 12,
-      mentoring_topics: ['Pricing model', 'Pilot planning', 'Fundraising prep'],
-      linkedin_url: 'https://linkedin.com/in/kavitamehra-demo',
-      created_at: new Date('2026-10-24T10:00:00Z').toISOString(),
-      updated_at: new Date('2026-10-24T10:00:00Z').toISOString(),
-    });
-
-    this.incubatorProfiles.set('c0000000-0000-0000-0000-000000000001', {
-      user_id: 'c0000000-0000-0000-0000-000000000001',
-      organization_name: 'Punjab Innovation Hub',
-      website: 'https://punjabinnovation.example.com',
-      program_types: ['Campus Fellowship', 'Pre-incubation', 'Prototype Grants'],
-      cohort_size: 25,
-      created_at: new Date('2026-10-12T10:00:00Z').toISOString(),
-      updated_at: new Date('2026-10-12T10:00:00Z').toISOString(),
-    });
   }
 
+  // --- Profile methods ---
   getProfileById(id: string): Profile | null {
     const profile = this.profiles.get(id);
     return profile ? { ...profile } : null;
@@ -255,6 +271,7 @@ class InMemoryDatabase {
     return { profiles: paginated, total };
   }
 
+  // --- Verification Request methods ---
   createVerificationRequest(req: VerificationRequest): VerificationRequest {
     const clone = { ...req, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     this.verificationRequests.set(clone.id, clone);
@@ -291,12 +308,21 @@ class InMemoryDatabase {
     return { ...clone };
   }
 
+  // --- Role Profiles ---
   getInvestorProfile(userId: string): InvestorProfile | null {
     const inv = this.investorProfiles.get(userId);
     return inv ? { ...inv } : null;
   }
 
   saveInvestorProfile(profile: InvestorProfile): InvestorProfile {
+    // Constraint check: ticket_size_min <= ticket_size_max
+    if (
+      profile.ticket_size_min !== undefined &&
+      profile.ticket_size_max !== undefined &&
+      profile.ticket_size_min > profile.ticket_size_max
+    ) {
+      throw new Error('check_ticket_range: ticket_min must be less than or equal to ticket_max');
+    }
     const clone = { ...profile, updated_at: new Date().toISOString() };
     this.investorProfiles.set(clone.user_id, clone);
     return { ...clone };
@@ -324,6 +350,123 @@ class InMemoryDatabase {
     return { ...clone };
   }
 
+  // --- Startups ---
+  createStartup(startup: Startup): Startup {
+    const clone = { ...startup, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    this.startups.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  getStartupById(id: string): Startup | null {
+    const s = this.startups.get(id);
+    return s ? { ...s } : null;
+  }
+
+  listStartups(options?: {
+    visibility?: string[];
+    sector?: string;
+    stage?: string;
+    search?: string;
+  }): Startup[] {
+    let list = Array.from(this.startups.values());
+    if (options?.visibility) {
+      list = list.filter((s) => options.visibility!.includes(s.visibility));
+    }
+    if (options?.sector && options.sector !== 'All sectors') {
+      list = list.filter((s) => s.sector === options.sector);
+    }
+    if (options?.stage && options.stage !== 'All stages') {
+      list = list.filter((s) => s.stage === options.stage);
+    }
+    if (options?.search) {
+      const q = options.search.toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.tagline.toLowerCase().includes(q) ||
+          s.description.toLowerCase().includes(q) ||
+          s.sector.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }
+
+  // --- Applications with uniqueness constraint ---
+  createApplication(app: Application): Application {
+    // Constraint check: one application per startup per program
+    for (const existing of this.applications.values()) {
+      if (existing.program_id === app.program_id && existing.startup_id === app.startup_id) {
+        throw new Error('unique_program_startup_application: duplicate application for this program and startup');
+      }
+    }
+    const clone = { ...app, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    this.applications.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  // --- Watchlist with uniqueness constraint ---
+  addToWatchlist(entry: WatchlistEntry): WatchlistEntry {
+    for (const existing of this.watchlist.values()) {
+      if (existing.investor_id === entry.investor_id && existing.startup_id === entry.startup_id) {
+        throw new Error('unique_watchlist_entry: startup is already in watchlist');
+      }
+    }
+    const clone = { ...entry, created_at: new Date().toISOString() };
+    this.watchlist.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  // --- Investor Notes ---
+  saveInvestorNote(note: InvestorNote): InvestorNote {
+    const clone = { ...note, updated_at: new Date().toISOString() };
+    this.investorNotes.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  // --- Messages with distinct user constraint ---
+  sendMessage(msg: Message): Message {
+    if (msg.sender_id === msg.recipient_id) {
+      throw new Error('check_messages_distinct_users: sender and recipient must be distinct');
+    }
+    const clone = { ...msg, created_at: new Date().toISOString() };
+    this.messages.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  // --- Mentor Feedback with rating constraint ---
+  addMentorFeedback(fb: MentorFeedback): MentorFeedback {
+    if (fb.rating < 1 || fb.rating > 5) {
+      throw new Error('check_rating_range: rating must be between 1 and 5');
+    }
+    const clone = { ...fb, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    this.mentorFeedback.set(clone.id, clone);
+    return { ...clone };
+  }
+
+  // --- RLS Evaluation Helpers ---
+  canReadStartup(userId: string, startup: Startup, userRole?: string): boolean {
+    if (userRole === 'admin') return true;
+    if (startup.founder_id === userId) return true;
+    if (startup.visibility === 'public' || startup.visibility === 'access_controlled') return true;
+    return false; // Private startup cannot be read by another user
+  }
+
+  canReadInvestorNote(userId: string, note: InvestorNote, userRole?: string): boolean {
+    if (userRole === 'admin') return true;
+    return note.investor_id === userId; // Private to owner
+  }
+
+  canReadMessage(userId: string, message: Message, userRole?: string): boolean {
+    if (userRole === 'admin') return true;
+    return message.sender_id === userId || message.recipient_id === userId; // Participants only
+  }
+
+  canReadWatchlist(userId: string, entry: WatchlistEntry, userRole?: string): boolean {
+    if (userRole === 'admin') return true;
+    return entry.investor_id === userId; // Private to owner
+  }
+
+  // --- Audit Logs ---
   createAuditLog(log: AuditLog): AuditLog {
     const clone = { ...log, created_at: new Date().toISOString() };
     this.auditLogs.unshift(clone);
