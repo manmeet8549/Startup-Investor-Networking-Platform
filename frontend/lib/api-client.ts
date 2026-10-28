@@ -37,7 +37,7 @@ export interface HealthCheckData {
   version: string;
 }
 
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://startup-investor-networking-platform.onrender.com/api/v1';
 const sanitizedApiUrl = rawApiUrl.replace(/\/+$/, '');
 const API_BASE_URL = sanitizedApiUrl.endsWith('/api/v1')
   ? sanitizedApiUrl

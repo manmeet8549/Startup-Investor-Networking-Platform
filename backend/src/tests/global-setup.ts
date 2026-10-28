@@ -29,7 +29,7 @@ export async function setup() {
   }
 
   // Guard against running test suite on unauthorized / production databases
-  const defaultAllowlist = 'tdvvdkobcgfrvotzdcor,localhost,127.0.0.1';
+  const defaultAllowlist = 'tdvvdkobcgfrvotzdcor,pooler.supabase.com,localhost,127.0.0.1';
   const allowlist = (process.env.TEST_DATABASE_ALLOWLIST || defaultAllowlist)
     .split(',')
     .map((item) => item.trim().toLowerCase())
