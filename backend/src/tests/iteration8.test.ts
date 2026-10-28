@@ -1,27 +1,39 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { config } from '../config.js';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 import { inMemoryDb } from '../db/index.js';
 import { generateToken } from '../middleware/auth.middleware.js';
 
 describe('Iteration 8: Mentorship, incubation and notifications', () => {
+  let origDbMode: boolean;
+  beforeAll(() => {
+    origDbMode = config.USE_IN_MEMORY_DB;
+    (config as any).USE_IN_MEMORY_DB = true;
+    (config as any).dbMode = 'in-memory';
+  });
+  afterAll(() => {
+    (config as any).USE_IN_MEMORY_DB = origDbMode;
+    (config as any).dbMode = origDbMode ? 'in-memory' : 'postgres';
+  });
+
   // Test users
   const founder1Id = 'f0000000-0000-0000-0000-000000000001'; // Manmeet Singh (owns FarmSense s1 & AgriDrone s2)
   const founder2Id = 'f0000000-0000-0000-0000-000000000002'; // Riya Kapoor (owns Medora s3)
-  const mentor1Id = 'm0000000-0000-0000-0000-000000000001';  // Dr. Kavita Mehra (AgriTech)
-  const mentor2Id = 'm0000000-0000-0000-0000-000000000002';  // Arjun Bedi (SaaS Growth)
+  const mentor1Id = 'd0000000-0000-0000-0000-000000000001';  // Dr. Kavita Mehra (AgriTech)
+  const mentor2Id = 'd0000000-0000-0000-0000-000000000002';  // Arjun Bedi (SaaS Growth)
   const incubator1Id = 'c0000000-0000-0000-0000-000000000001'; // Punjab Innovation Hub (owns p1 & p2)
   const incubator2Id = 'c0000000-0000-0000-0000-000000000002'; // ClimateX Accelerator (owns p3)
-  const investor1Id = 'i0000000-0000-0000-0000-000000000001';  // Northstar Ventures
+  const investor1Id = 'b0000000-0000-0000-0000-000000000001';  // Northstar Ventures
 
   // Test startups
-  const startup1Id = 's0000000-0000-0000-0000-000000000001'; // FarmSense (founder1)
-  const startup2Id = 's0000000-0000-0000-0000-000000000002'; // AgriDrone (founder1)
-  const startup3Id = 's0000000-0000-0000-0000-000000000003'; // Medora AI (founder2)
+  const startup1Id = 'e0000000-0000-0000-0000-000000000001'; // FarmSense (founder1)
+  const startup2Id = 'e0000000-0000-0000-0000-000000000002'; // AgriDrone (founder1)
+  const startup3Id = 'e0000000-0000-0000-0000-000000000003'; // Medora AI (founder2)
 
   // Test programs
-  const program1Id = 'p0000000-0000-0000-0000-000000000001'; // Punjab Campus Fellowship (deadline 2026-11-30)
-  const program3Id = 'p0000000-0000-0000-0000-000000000003'; // ClimateX (deadline 2027-01-10)
+  const program1Id = '90000000-0000-0000-0000-000000000001'; // Punjab Campus Fellowship (deadline 2026-11-30)
+  const program3Id = '90000000-0000-0000-0000-000000000003'; // ClimateX (deadline 2027-01-10)
 
   // Auth tokens
   const founder1Token = generateToken({ sub: founder1Id, role: 'founder', email: 'manmeet@foundersden.test' });
@@ -40,6 +52,7 @@ describe('Iteration 8: Mentorship, incubation and notifications', () => {
   // 1. MENTORS & MENTORSHIP REQUESTS
   // ==========================================
   describe('1. Mentors and Mentorship Requests', () => {
+
     it('GET /api/v1/mentors returns public list of mentors', async () => {
       const res = await request(app).get('/api/v1/mentors');
       expect(res.status).toBe(200);

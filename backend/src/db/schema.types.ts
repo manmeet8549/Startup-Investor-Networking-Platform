@@ -275,6 +275,7 @@ export interface Notification {
   payload?: Record<string, unknown>;
   link: string | null;
   read: boolean;
+  is_read?: boolean;
   created_at: string;
 }
 

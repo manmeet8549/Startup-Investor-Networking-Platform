@@ -1,0 +1,25 @@
+name: Keep-Alive Heartbeat
+
+on:
+  schedule:
+    # Run every 14 minutes to prevent Render free tier from idling/sleeping
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  heartbeat:
+    name: Ping Render Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Health Endpoint
+        run: |
+          RENDER_URL="${{ secrets.RENDER_BACKEND_URL || 'https://startup-investor-networking-platform.onrender.com' }}"
+          echo "Sending keep-alive ping to $RENDER_URL/health..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "$RENDER_URL/health")
+          echo "Response HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
+            echo "Success: Render server is awake and healthy."
+          else
+            echo "Warning: Received HTTP status $HTTP_STATUS"
+          fi
+

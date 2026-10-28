@@ -14,8 +14,7 @@ ALTER TABLE public.startups
 ALTER TABLE public.notifications
     ADD COLUMN IF NOT EXISTS payload JSONB NOT NULL DEFAULT '{}'::jsonb;
 
--- 3. Supabase storage bucket for startup documents (private)
--- Supabase Storage schema may exist in Supabase PostgreSQL
+-- 3. Supabase storage bucket for startup documents (private) and storage policies
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'storage') THEN
@@ -31,5 +30,35 @@ BEGIN
             public = false,
             file_size_limit = 10485760,
             allowed_mime_types = ARRAY['application/pdf']::text[];
+    END IF;
+END $$;
+
+-- 4. Storage Policies for startup-documents
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'objects') THEN
+        -- Allow authenticated users to upload documents to startup-documents
+        DROP POLICY IF EXISTS "Authenticated users upload startup documents" ON storage.objects;
+        CREATE POLICY "Authenticated users upload startup documents" ON storage.objects
+            FOR INSERT TO authenticated
+            WITH CHECK (bucket_id = 'startup-documents');
+
+        -- Allow authenticated users to read documents from startup-documents
+        DROP POLICY IF EXISTS "Authenticated users read startup documents" ON storage.objects;
+        CREATE POLICY "Authenticated users read startup documents" ON storage.objects
+            FOR SELECT TO authenticated
+            USING (bucket_id = 'startup-documents');
+
+        -- Allow users to update their own documents in startup-documents
+        DROP POLICY IF EXISTS "Users update own startup documents" ON storage.objects;
+        CREATE POLICY "Users update own startup documents" ON storage.objects
+            FOR UPDATE TO authenticated
+            USING (bucket_id = 'startup-documents' AND (owner = auth.uid() OR public.is_admin()));
+
+        -- Allow users to delete their own documents in startup-documents
+        DROP POLICY IF EXISTS "Users delete own startup documents" ON storage.objects;
+        CREATE POLICY "Users delete own startup documents" ON storage.objects
+            FOR DELETE TO authenticated
+            USING (bucket_id = 'startup-documents' AND (owner = auth.uid() OR public.is_admin()));
     END IF;
 END $$;

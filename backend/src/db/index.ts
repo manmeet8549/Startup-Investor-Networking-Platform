@@ -54,7 +54,7 @@ const { Pool } = pg;
 const initialVerificationRequests: VerificationRequest[] = [
   {
     id: 'e0000000-0000-0000-0000-000000000001',
-    user_id: 'i0000000-0000-0000-0000-000000000001',
+    user_id: 'b0000000-0000-0000-0000-000000000001',
     role_requested: 'investor',
     organization: 'Northstar Ventures',
     supporting_notes: 'Seed fund managing ₹50Cr active portfolio in India.',
@@ -67,7 +67,7 @@ const initialVerificationRequests: VerificationRequest[] = [
   },
   {
     id: 'e0000000-0000-0000-0000-000000000002',
-    user_id: 'm0000000-0000-0000-0000-000000000001',
+    user_id: 'd0000000-0000-0000-0000-000000000001',
     role_requested: 'mentor',
     organization: 'Independent Advisor',
     supporting_notes: '12 years experience mentoring climate and biotech founders.',
@@ -1756,7 +1756,7 @@ export const inMemoryDb = new InMemoryDatabase();
 
 let pgPool: pg.Pool | null = null;
 
-if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+if (!config.USE_IN_MEMORY_DB && config.DATABASE_URL) {
   pgPool = new Pool({
     connectionString: config.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
@@ -1767,7 +1767,7 @@ if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
 }
 
 /**
- * Execute a parameterized query with fallback to in-memory store in test / local setup.
+ * Execute a parameterized query with strict postgres execution unless USE_IN_MEMORY_DB=true.
  */
 export async function query<T = unknown>(
   text: string,
@@ -1781,9 +1781,12 @@ export async function query<T = unknown>(
     return { rows: res.rows as T[], rowCount: res.rowCount ?? 0 };
   }
 
-  // If running in in-memory mode, log and return empty structure if raw query isn't mapped
-  logger.debug({ text, params }, 'In-memory DB query called');
-  return { rows: [], rowCount: 0 };
+  if (config.USE_IN_MEMORY_DB) {
+    logger.debug({ text, params }, 'In-memory DB query called');
+    return { rows: [], rowCount: 0 };
+  }
+
+  throw new Error('Database is in postgres mode but connection pool is not initialized');
 }
 
 export async function closeDb(): Promise<void> {

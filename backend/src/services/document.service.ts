@@ -60,7 +60,7 @@ export async function uploadDocument(
   const now = new Date().toISOString();
 
   // 5. Upload to Supabase Storage if remote connection is live
-  if (config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     try {
       const { error: uploadError } = await supabaseAdmin.storage
         .from(STORAGE_BUCKET)
@@ -91,33 +91,27 @@ export async function uploadDocument(
     updated_at: now,
   };
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
-    try {
-      const res = await query<Document>(
-        `INSERT INTO public.documents
-          (id, startup_id, uploader_id, title, file_path, file_type, file_size, version, visibility, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         RETURNING *`,
-        [
-          document.id,
-          document.startup_id,
-          document.uploader_id,
-          document.title,
-          document.file_path,
-          document.file_type,
-          document.file_size,
-          document.version,
-          document.visibility,
-          document.created_at,
-          document.updated_at,
-        ]
-      );
-      if (res.rows.length > 0) {
-        return res.rows[0];
-      }
-    } catch (err) {
-      logger.error({ err }, 'Failed to insert document into PostgreSQL, saving to inMemoryDb');
-    }
+  if (!config.USE_IN_MEMORY_DB) {
+    const res = await query<Document>(
+      `INSERT INTO public.documents
+        (id, startup_id, uploader_id, title, file_path, file_type, file_size, version, visibility, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [
+        document.id,
+        document.startup_id,
+        document.uploader_id,
+        document.title,
+        document.file_path,
+        document.file_type,
+        document.file_size,
+        document.version,
+        document.visibility,
+        document.created_at,
+        document.updated_at,
+      ]
+    );
+    return res.rows[0];
   }
 
   inMemoryDb.createDocument(document);
@@ -134,7 +128,7 @@ export async function listDocuments(
   const startup = await getStartupById(startupId, user);
 
   let docs: Document[] = [];
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Document>(
       'SELECT * FROM public.documents WHERE startup_id = $1 ORDER BY version DESC, created_at DESC',
       [startupId]
@@ -165,7 +159,7 @@ export async function deleteDocument(
 ): Promise<void> {
   let doc = inMemoryDb.getDocumentById(documentId);
 
-  if (!doc && config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!doc && !config.USE_IN_MEMORY_DB) {
     const res = await query<Document>('SELECT * FROM public.documents WHERE id = $1 LIMIT 1', [documentId]);
     if (res.rows.length > 0) {
       doc = res.rows[0];
@@ -181,7 +175,7 @@ export async function deleteDocument(
     throw new AppError('Only the startup owner or admin can delete documents', 403, 'FORBIDDEN');
   }
 
-  if (config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     try {
       await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([doc.file_path]);
     } catch (err) {
@@ -189,8 +183,9 @@ export async function deleteDocument(
     }
   }
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     await query('DELETE FROM public.documents WHERE id = $1', [documentId]);
+    return;
   }
   inMemoryDb.deleteDocument(documentId);
 }
@@ -205,7 +200,7 @@ export async function requestDocumentAccess(
 ): Promise<DocumentAccessRequest> {
   let doc = inMemoryDb.getDocumentById(documentId);
 
-  if (!doc && config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!doc && !config.USE_IN_MEMORY_DB) {
     const res = await query<Document>('SELECT * FROM public.documents WHERE id = $1 LIMIT 1', [documentId]);
     if (res.rows.length > 0) {
       doc = res.rows[0];
@@ -358,7 +353,7 @@ export async function getDocumentDownloadUrl(
 ): Promise<{ download_url: string; expires_in: number }> {
   let doc = inMemoryDb.getDocumentById(documentId);
 
-  if (!doc && config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!doc && !config.USE_IN_MEMORY_DB) {
     const res = await query<Document>('SELECT * FROM public.documents WHERE id = $1 LIMIT 1', [documentId]);
     if (res.rows.length > 0) {
       doc = res.rows[0];
@@ -424,7 +419,7 @@ export async function getDocumentDownloadUrl(
   // Generate signed URL valid for 60 seconds
   const expiresIn = SIGNED_URL_TTL_SECONDS;
 
-  if (config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     try {
       const { data, error } = await supabaseAdmin.storage
         .from(STORAGE_BUCKET)

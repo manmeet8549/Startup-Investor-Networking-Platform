@@ -1,0 +1,42 @@
+# Founders Den - Render Blueprint Specification
+# Service Type: Web Service (Node.js backend)
+# Plan Note:
+#   - 'free': Suitable for personal testing and demos, but spins down after 15 minutes of inactivity (causing cold starts).
+#   - 'starter': Recommended for production deployment ($7/mo), stays continuously awake with 512MB RAM and 0.5 CPU.
+
+services:
+  - type: web
+    name: founders-den-backend
+    runtime: node
+    rootDir: backend
+    # Plan: 'free' spins down after 15 minutes of inactivity (50s cold start).
+    # Upgrade to 'starter' ($7/mo) when zero-downtime, continuous uptime, and eliminating cold starts are required.
+    plan: free
+    region: oregon # Or nearest region to Supabase project
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: USE_IN_MEMORY_DB
+        value: "false"
+      - key: DATABASE_URL
+        sync: false # Set in Render Dashboard: Supabase Session pooler connection string (port 5432 or 6543)
+      - key: MIGRATION_DATABASE_URL
+        sync: false # Set in Render Dashboard: Supabase direct or pooler connection string for migrations
+      - key: SUPABASE_URL
+        sync: false # Set in Render Dashboard: https://<project-ref>.supabase.co
+      - key: SUPABASE_ANON_KEY
+        sync: false # Set in Render Dashboard: Supabase Anon public key
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # Set in Render Dashboard: Supabase Service Role secret key
+      - key: SUPABASE_JWT_SECRET
+        sync: false # Set in Render Dashboard: (Optional) JWT secret from Supabase API settings
+      - key: CORS_ORIGIN
+        sync: false # Set in Render Dashboard: Comma-separated list of frontend URLs (e.g. https://founders-den.vercel.app)
+      - key: KEEP_ALIVE_URL
+        value: "https://startup-investor-networking-platform.onrender.com"

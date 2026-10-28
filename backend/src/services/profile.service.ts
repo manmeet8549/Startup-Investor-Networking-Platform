@@ -7,7 +7,7 @@ import { config } from '../config.js';
 export async function getProfile(id: string): Promise<Profile> {
   let profile: Profile | null = null;
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Profile>('SELECT * FROM public.profiles WHERE id = $1 LIMIT 1', [id]);
     if (res.rows.length > 0) profile = res.rows[0];
   } else {
@@ -36,7 +36,7 @@ export async function updateProfile(id: string, input: UpdateProfileInput): Prom
     updated_at: new Date().toISOString(),
   };
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const updateSql = `
       UPDATE public.profiles SET
         full_name = $1,

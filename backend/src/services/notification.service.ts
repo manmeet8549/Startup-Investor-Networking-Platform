@@ -54,30 +54,26 @@ export async function notify(
     'Creating user notification'
   );
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
-    try {
-      const res = await query<Notification>(
-        `INSERT INTO public.notifications (id, user_id, title, message, type, payload, link, read, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING *`,
-        [
-          notification.id,
-          notification.user_id,
-          notification.title,
-          notification.message,
-          notification.type,
-          JSON.stringify(notification.payload),
-          notification.link,
-          notification.read,
-          notification.created_at,
-        ]
-      );
-      if (res.rows.length > 0) {
-        return res.rows[0];
-      }
-    } catch (err) {
-      logger.error({ err, userId }, 'Failed to persist notification to PostgreSQL, saving to in-memory store');
-    }
+  if (!config.USE_IN_MEMORY_DB) {
+    const res = await query<Notification>(
+      `INSERT INTO public.notifications (id, user_id, title, message, type, payload, link, read, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        notification.id,
+        notification.user_id,
+        notification.title,
+        notification.message,
+        notification.type,
+        JSON.stringify(notification.payload),
+        notification.link,
+        notification.read,
+        notification.created_at,
+      ]
+    );
+    const saved = res.rows[0] || notification;
+    inMemoryDb.notifications.set(saved.id, saved);
+    return saved;
   }
 
   // Save to inMemoryDb

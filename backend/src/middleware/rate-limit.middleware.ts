@@ -3,7 +3,7 @@ import { config } from '../config.js';
 
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: config.NODE_ENV === 'test' ? 10000 : 25,
+  max: config.NODE_ENV === 'production' ? 100 : 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

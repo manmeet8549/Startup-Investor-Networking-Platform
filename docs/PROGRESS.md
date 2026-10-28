@@ -508,17 +508,66 @@
 ---
 
 ## Assumptions
-1. **Database Role Source of Truth**: The JWT contains the user ID (`sub`). The user's role is always fetched directly from the database `profiles` table to prevent token manipulation or client-side role tampering.
-2. **Student Innovator Representation**: Rather than creating a separate role, student status is implemented as an `is_student` boolean profile flag on `founder` accounts. This allows student founders to access all founder tools while qualifying for campus-specific programs and filters.
-3. **Verification Policy**: Founders are verified immediately upon registration. Non-founder roles (`investor`, `mentor`, `incubator`) are created in a `pending` state and automatically added to the admin `verification_requests` queue.
-4. **Environment & Testing Flexibility**: The database layer connects via `pg.Pool` when `DATABASE_URL` is set, and falls back to an in-memory database store for fast, deterministic, offline test execution.
-5. **Suspended Accounts**: When an admin marks an account as `suspended`, both `login` and authenticated requests via JWT are immediately rejected with status `403 ACCOUNT_SUSPENDED`.
+1. **Explicit Database Mode Requirement**: The backend strictly requires a valid PostgreSQL `DATABASE_URL` to boot. Silent fallback to in-memory mode has been eliminated; in-memory execution is permitted ONLY when `USE_IN_MEMORY_DB=true` is set explicitly for offline unit testing. The active mode is always logged on startup: `'DB mode: postgres'` or `'DB mode: in-memory'`.
+2. **Database Role Source of Truth**: The JWT contains the user ID (`sub`). The user's role is always fetched directly from the database `profiles` table to prevent token manipulation or client-side role tampering.
+3. **Unified Verification Policy**: `verification_status` is strictly unified to `'pending'`, `'verified'`, and `'rejected'`. The deprecated `'approved'` state has been completely removed in favor of `'verified'`. Founders are verified on creation; non-founder roles (`investor`, `mentor`, `incubator`) are created in `'pending'` status and routed to the admin verification queue.
+4. **Row-Level Security (RLS) Coverage**: RLS is strictly enabled across all 26 public tables in the PostgreSQL schema, with granular read/write policies for founders, investors, mentors, incubators, and admins.
+5. **Pitch Deck Storage & Signed Access**: Documents are saved in the private `startup-documents` Supabase Storage bucket with strict RLS policies on `storage.objects` and accessed via 60-second time-limited signed URLs.
+6. **Idempotent User & Profile Seeding**: The seed script (`npm run db:seed`) idempotently provisions canonical demo accounts through the Supabase Auth Admin API (`supabaseAdmin.auth.admin.createUser`) and syncs profile/entity data into PostgreSQL using `ON CONFLICT` updates.
+7. **Suspended Accounts**: When an admin marks an account as `suspended`, both `login` and authenticated requests via JWT are immediately rejected with status `403 ACCOUNT_SUSPENDED`.
 
 ---
 
-## Known Gaps (Deferred to Subsequent Iterations)
-1. **Startup Management**: Startup CRUD and company members table will be implemented in Iteration 2.
-2. **File Storage & Pitch Decks**: Supabase Storage integration with short-lived signed URLs will be implemented in Iteration 3.
-3. **Matching Algorithm**: Multi-factor scoring engine (sector 30%, stage 25%, funding 20%, location 15%, model 10%) will be built in Iteration 4.
-4. **Incubator & Mentorship Workflows**: Application lifecycle and mentor availability booking will be built in Iteration 5.
-5. **Live Frontend Wiring**: Frontend UI currently uses styled prototype mocks; live data wiring will occur in harmony with each backend feature set.
+---
+
+## Iteration 11: Production Deployment Readiness (Render, Vercel, Supabase)
+
+### Completed Work
+
+1. **Backend Production Hardening (Render)**:
+   - Configured Express server to bind to `0.0.0.0` and dynamic `process.env.PORT` with `src/server.ts` entrypoint.
+   - Set `engines.node >= 20` and verified production build pipeline `npm ci && npm run build && npm start`.
+   - Implemented root health check `GET /health` returning 200 immediately without database overhead for Render platform monitoring.
+   - Implemented database health and readiness checks `GET /api/v1/health` and `GET /api/v1/ready` returning 200 OK or 503 Service Unavailable when DB is down.
+   - Enabled `app.set('trust proxy', 1)` to correctly capture real client IPs across Render/Cloudflare reverse proxies for rate limiting and logging.
+   - Implemented strict CORS matching using comma-separated exact origin list from `CORS_ORIGIN` with wildcards prohibited and credentials permitted only for authorized origins.
+   - Added production environment validation in `src/config.ts`: refuses to boot in `NODE_ENV=production` if `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, or `CORS_ORIGIN` are missing, or if `USE_IN_MEMORY_DB` is true (error message names the variable, never its value).
+   - Configured small PostgreSQL pool (max 10) with SSL and idle/connection timeouts, plus `pool.on('error')` handler to prevent process crashes.
+   - Made `SUPABASE_JWT_SECRET` optional by utilizing Supabase GoTrue `supabase.auth.getUser(token)` verification.
+   - Added PDF magic-byte (`%PDF-`) verification and 10MB file limit for pitch deck uploads, retaining 60-second expiring signed download URLs.
+   - Added graceful shutdown on `SIGTERM` and `SIGINT` with 10-second forced exit safeguard.
+   - Added safety guards to `db:reset` (requires `--i-know-this-drops-tables` in production) and `db:seed` (requires `ALLOW_SEED=true` in production).
+   - Created standalone idempotent migration engine `npm run db:migrate` tracking applied migrations in `public.schema_migrations`.
+   - Created root `render.yaml` Blueprint specification for Render Web Service deployment.
+
+2. **Frontend Production Hardening (Vercel)**:
+   - Eliminated hardcoded fallback URLs and keys; strictly loads from `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+   - Enforced production build failure in `next.config.mjs` if any required `NEXT_PUBLIC_*` variable is omitted.
+   - Verified that service role keys and database connection strings are never referenced in frontend code.
+   - Added Next.js App Router boundaries:
+     - `app/loading.tsx` for platform loading spinner.
+     - `app/error.tsx` for graceful failure handling and recovery.
+     - `app/not-found.tsx` for 404 views.
+   - Sanitized `frontend/.env.example` with clear comments and placeholder values.
+   - Successfully compiled production bundle with `next build` passing cleanly.
+
+3. **Repository Hygiene & Security**:
+   - Confirmed `.env` and `.env.local` files are properly excluded by `.gitignore` and not tracked by Git.
+   - Scanned Git history for leaked credentials; sanitized `backend/.env.example`.
+   - Masked connection string printing across diagnostic scripts.
+   - Verified `npm audit` reporting 0 vulnerabilities across both applications.
+   - Configured Helmet security headers with `crossOriginResourcePolicy: cross-origin` for browser CORS compatibility.
+
+4. **CI/CD & Documentation**:
+   - Added `.github/workflows/ci.yml` running lint, typecheck, build, and tests for backend and frontend on pull requests and pushes to main.
+   - Added `.github/workflows/migrate.yml` running `npm run db:migrate` automatically on pushes to main.
+   - Authored comprehensive [docs/DEPLOYMENT.md](file:///d:/Downloads/founders-den-redesign/docs/DEPLOYMENT.md) with architecture diagram, variable matrix, manual Supabase checklist, rollback protocols, key rotation procedures, and troubleshooting guide.
+
+---
+
+## Known Gaps & Operational Notes
+1. **Frontend Route Splitting**: The frontend currently uses single-page dynamic view switching in `app/page.tsx` with role guards rather than distinct subdirectories per portal (e.g. `/founder/dashboard`, `/investor/pipeline`). This was intentionally retained to maintain state cohesion, navigation consistency, and zero UI regressions.
+2. **WebSocket Realtime Subscriptions**: Messages and notification updates currently use REST polling with optimistic UI updates; live Supabase Realtime channels can be attached for WebSocket events in future milestones.
+3. **Enterprise Antivirus Scanning**: Uploaded PDF pitch decks undergo file signature (magic bytes) validation and size restrictions (10MB); enterprise antivirus hooks (e.g. ClamAV / AWS GuardDuty) can be integrated for additional malware defense before archival.
+
+

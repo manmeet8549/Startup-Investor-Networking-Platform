@@ -13,26 +13,51 @@ export interface AuthRegistrationResult {
   verification_request: VerificationRequest | null;
 }
 
-export async function registerProfile(input: RegisterProfileInput): Promise<AuthRegistrationResult> {
+export async function registerProfile(
+  input: RegisterProfileInput,
+  tokenUserId?: string,
+  tokenEmail?: string
+): Promise<AuthRegistrationResult> {
   // Explicit security rule: Never allow admin registration
   if ((input.role as string) === 'admin') {
     throw new AppError('Admin registration is not permitted', 403, 'FORBIDDEN');
   }
 
-  // Check if email already registered
+  // The user ID must come from the verified authentication token (or fallback for direct tests)
+  const userId = tokenUserId || input.user_id || crypto.randomUUID();
+  if (!userId) {
+    throw new AppError('Missing user identity from authentication token', 401, 'UNAUTHORIZED');
+  }
+
+  const registrationEmail = (tokenEmail || input.email).toLowerCase();
+
+  // In postgres mode, ensure the auth user actually exists in auth.users
+  if (!config.USE_IN_MEMORY_DB) {
+    const authUserRes = await query<{ id: string; email: string }>(
+      'SELECT id, email FROM auth.users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+    if (authUserRes.rows.length === 0) {
+      throw new AppError('Auth user does not exist in authentication service', 404, 'AUTH_USER_NOT_FOUND');
+    }
+  }
+
+  // Check if profile already registered
   let existing: Profile | null = null;
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
-    const res = await query<Profile>('SELECT * FROM public.profiles WHERE LOWER(email) = LOWER($1) LIMIT 1', [input.email]);
+  if (!config.USE_IN_MEMORY_DB) {
+    const res = await query<Profile>(
+      'SELECT * FROM public.profiles WHERE id = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
+      [userId, registrationEmail]
+    );
     if (res.rows.length > 0) existing = res.rows[0];
   } else {
-    existing = inMemoryDb.getProfileByEmail(input.email);
+    existing = inMemoryDb.getProfileById(userId) || inMemoryDb.getProfileByEmail(registrationEmail);
   }
 
   if (existing) {
     throw new AppError('Email address is already in use', 409, 'EMAIL_EXISTS');
   }
 
-  const userId = input.user_id || crypto.randomUUID();
   const now = new Date().toISOString();
 
   // Founders are approved immediately; other roles start as pending
@@ -41,7 +66,7 @@ export async function registerProfile(input: RegisterProfileInput): Promise<Auth
 
   const newProfile: Profile = {
     id: userId,
-    email: input.email.toLowerCase(),
+    email: registrationEmail,
     full_name: input.full_name,
     role: input.role,
     is_student: isFounder ? Boolean(input.is_student) : false,
@@ -57,7 +82,7 @@ export async function registerProfile(input: RegisterProfileInput): Promise<Auth
   };
 
   let savedProfile: Profile;
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const insertSql = `
       INSERT INTO public.profiles (
         id, email, full_name, role, is_student, organization, bio, location, website, status, verification_status, created_at, updated_at
@@ -80,43 +105,76 @@ export async function registerProfile(input: RegisterProfileInput): Promise<Auth
       newProfile.updated_at,
     ]);
     savedProfile = res.rows[0];
+    inMemoryDb.saveProfile(savedProfile);
+
+    // Initialize corresponding role profile table in Postgres
+    if (savedProfile.role === 'founder') {
+      await query(
+        `INSERT INTO public.founder_profiles (user_id, created_at, updated_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO NOTHING;`,
+        [savedProfile.id, now, now]
+      );
+    } else if (savedProfile.role === 'investor') {
+      await query(
+        `INSERT INTO public.investor_profiles (user_id, firm_name, thesis, ticket_min, ticket_max, created_at, updated_at)
+         VALUES ($1, $2, $3, 0, 0, $4, $5)
+         ON CONFLICT (user_id) DO NOTHING;`,
+        [savedProfile.id, savedProfile.organization || savedProfile.full_name, savedProfile.bio, now, now]
+      );
+    } else if (savedProfile.role === 'mentor') {
+      await query(
+        `INSERT INTO public.mentor_profiles (user_id, linkedin_url, created_at, updated_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id) DO NOTHING;`,
+        [savedProfile.id, savedProfile.website, now, now]
+      );
+    } else if (savedProfile.role === 'incubator') {
+      await query(
+        `INSERT INTO public.incubator_profiles (user_id, organization_name, website, cohort_size, created_at, updated_at)
+         VALUES ($1, $2, $3, 0, $4, $5)
+         ON CONFLICT (user_id) DO NOTHING;`,
+        [savedProfile.id, savedProfile.organization || savedProfile.full_name, savedProfile.website, now, now]
+      );
+    }
   } else {
     savedProfile = inMemoryDb.saveProfile(newProfile);
-  }
-
-  // Initialize role profile
-  if (savedProfile.role === 'investor') {
-    inMemoryDb.saveInvestorProfile({
-      user_id: savedProfile.id,
-      investment_thesis: savedProfile.bio,
-      ticket_size_min: 0,
-      ticket_size_max: 0,
-      preferred_sectors: [],
-      preferred_stages: [],
-      preferred_locations: [],
-      created_at: now,
-      updated_at: now,
-    });
-  } else if (savedProfile.role === 'mentor') {
-    inMemoryDb.saveMentorProfile({
-      user_id: savedProfile.id,
-      expertise_areas: [],
-      years_of_experience: 0,
-      mentoring_topics: [],
-      linkedin_url: savedProfile.website,
-      created_at: now,
-      updated_at: now,
-    });
-  } else if (savedProfile.role === 'incubator') {
-    inMemoryDb.saveIncubatorProfile({
-      user_id: savedProfile.id,
-      organization_name: savedProfile.organization || savedProfile.full_name,
-      website: savedProfile.website,
-      program_types: [],
-      cohort_size: 0,
-      created_at: now,
-      updated_at: now,
-    });
+    if (savedProfile.role === 'investor') {
+      inMemoryDb.saveInvestorProfile({
+        user_id: savedProfile.id,
+        firm_name: savedProfile.organization || savedProfile.full_name,
+        thesis: savedProfile.bio,
+        ticket_min: 0,
+        ticket_max: 0,
+        sectors: [],
+        stages: [],
+        regions: [],
+        business_models: [],
+        accredited: true,
+        created_at: now,
+        updated_at: now,
+      });
+    } else if (savedProfile.role === 'mentor') {
+      inMemoryDb.saveMentorProfile({
+        user_id: savedProfile.id,
+        expertise_areas: [],
+        years_of_experience: 0,
+        mentoring_topics: [],
+        linkedin_url: savedProfile.website,
+        created_at: now,
+        updated_at: now,
+      });
+    } else if (savedProfile.role === 'incubator') {
+      inMemoryDb.saveIncubatorProfile({
+        user_id: savedProfile.id,
+        organization_name: savedProfile.organization || savedProfile.full_name,
+        website: savedProfile.website,
+        program_types: [],
+        cohort_size: 0,
+        created_at: now,
+        updated_at: now,
+      });
+    }
   }
 
   let verificationRequest: VerificationRequest | null = null;
@@ -137,7 +195,7 @@ export async function registerProfile(input: RegisterProfileInput): Promise<Auth
     };
     verificationRequest = vReq;
 
-    if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+    if (!config.USE_IN_MEMORY_DB) {
       await query(
         `INSERT INTO public.verification_requests (id, user_id, role_requested, organization, supporting_notes, status, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -163,12 +221,42 @@ export async function registerProfile(input: RegisterProfileInput): Promise<Auth
 }
 
 export async function register(input: RegisterInput): Promise<AuthRegistrationResult> {
-  return registerProfile(input as RegisterProfileInput);
+  let userId: string = crypto.randomUUID();
+  const password = input.password || 'Password123!';
+
+  if (!config.USE_IN_MEMORY_DB) {
+    // Check if user already in auth.users
+    const existingAuth = await query<{ id: string }>('SELECT id FROM auth.users WHERE LOWER(email) = LOWER($1)', [input.email]);
+    if (existingAuth.rows.length > 0) {
+      userId = existingAuth.rows[0].id;
+    } else {
+      await query(
+        `INSERT INTO auth.users (
+          instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+        ) VALUES (
+          '00000000-0000-0000-0000-000000000000',
+          $1,
+          'authenticated',
+          'authenticated',
+          $2,
+          extensions.crypt($3, extensions.gen_salt('bf')),
+          now(),
+          '{"provider":"email","providers":["email"]}'::jsonb,
+          $4::jsonb,
+          now(),
+          now()
+        )`,
+        [userId, input.email.toLowerCase(), password, JSON.stringify({ full_name: input.full_name, role: input.role })]
+      );
+    }
+  }
+
+  return registerProfile(input as RegisterProfileInput, userId, input.email);
 }
 
 export async function login(input: LoginInput): Promise<{ user: Profile; token: string }> {
   let profile: Profile | null = null;
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Profile>('SELECT * FROM public.profiles WHERE LOWER(email) = LOWER($1) LIMIT 1', [input.email]);
     if (res.rows.length > 0) profile = res.rows[0];
   } else {

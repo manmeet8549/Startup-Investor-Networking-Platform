@@ -1,4 +1,5 @@
 import { inMemoryDb, query } from '../db/index.js';
+import { config } from '../config.js';
 import {
   calculateMatchScore,
   MATCHING_DISCLAIMER,
@@ -9,7 +10,7 @@ import {
 import type { InvestorPreferencesInput } from '../schemas/matching.schema.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { logger } from '../utils/logger.js';
-import type { InvestorProfile, MatchScore } from '../db/schema.types.js';
+import type { InvestorProfile, MatchScore, Startup } from '../db/schema.types.js';
 
 export interface RankedInvestorMatch {
   investor: {
@@ -60,7 +61,7 @@ export class MatchingService {
    * Retrieves investor preferences.
    */
   async getInvestorPreferences(userId: string): Promise<InvestorProfile> {
-    try {
+    if (!config.USE_IN_MEMORY_DB) {
       const dbRes = await query<InvestorProfile>(
         `SELECT * FROM public.investor_profiles WHERE user_id = $1`,
         [userId]
@@ -68,8 +69,33 @@ export class MatchingService {
       if (dbRes.rows.length > 0) {
         return dbRes.rows[0];
       }
-    } catch (err) {
-      logger.debug({ err, userId }, 'PostgreSQL investor preference query fallback');
+      const profRes = await query<{ full_name: string; organization: string | null; bio: string | null }>(
+        `SELECT full_name, organization, bio FROM public.profiles WHERE id = $1`,
+        [userId]
+      );
+      const prof = profRes.rows[0];
+      const defaultFirmName = prof?.organization || prof?.full_name || 'Angel Investor';
+      const defaultThesis = prof?.bio || 'Backing scalable tech startups across India.';
+      const insertRes = await query<InvestorProfile>(
+        `INSERT INTO public.investor_profiles (
+          user_id, firm_name, sectors, stages, ticket_min, ticket_max, regions, business_models, thesis, accredited, created_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now()
+        ) RETURNING *`,
+        [
+          userId,
+          defaultFirmName,
+          ['AgriTech', 'AI', 'Climate Tech'],
+          ['mvp', 'early_traction'],
+          1000000,
+          5000000,
+          ['Punjab', 'North India', 'Pan-India'],
+          ['B2B', 'SaaS', 'Marketplace'],
+          defaultThesis,
+          true,
+        ]
+      );
+      return insertRes.rows[0];
     }
 
     const ip = inMemoryDb.getInvestorProfile(userId);
@@ -125,8 +151,7 @@ export class MatchingService {
       updated_at: new Date().toISOString(),
     };
 
-    // Invalidate cached match_scores for this investor in PostgreSQL
-    try {
+    if (!config.USE_IN_MEMORY_DB) {
       await query(
         `INSERT INTO public.investor_profiles (
           user_id, firm_name, sectors, stages, ticket_min, ticket_max, regions, business_models, thesis, updated_at
@@ -154,8 +179,7 @@ export class MatchingService {
         ]
       );
       await query(`DELETE FROM public.match_scores WHERE investor_id = $1`, [userId]);
-    } catch (err) {
-      logger.debug({ err, userId }, 'PostgreSQL investor preference update fallback');
+      return updated;
     }
 
     // Invalidate in-memory cache and save
@@ -180,7 +204,13 @@ export class MatchingService {
     meta: { page: number; limit: number; total: number; total_pages: number };
     disclaimer: string;
   }> {
-    const startup = inMemoryDb.getStartupById(startupId);
+    let startup: Startup | null = null;
+    if (!config.USE_IN_MEMORY_DB) {
+      const sRes = await query<Startup>('SELECT * FROM public.startups WHERE id = $1', [startupId]);
+      if (sRes.rows.length > 0) startup = sRes.rows[0];
+    } else {
+      startup = inMemoryDb.getStartupById(startupId);
+    }
     if (!startup) {
       throw new AppError('Startup not found', 404, 'NOT_FOUND');
     }
@@ -328,15 +358,28 @@ export class MatchingService {
     };
 
     // Only listed startups (public or access_controlled, not hidden, founder verified)
-    const listedStartups = inMemoryDb.listStartups().filter((s) => {
-      if (s.is_hidden || s.visibility === 'private') return false;
-      const founder = inMemoryDb.getProfileById(s.founder_id);
-      return (
-        founder &&
-        (founder.verification_status === 'verified' ||
-          (founder.verification_status as string) === 'approved')
+    let listedStartups: (Startup & { founder_verification_status?: string })[] = [];
+    if (!config.USE_IN_MEMORY_DB) {
+      const res = await query<Startup & { founder_verification_status: string }>(
+        `SELECT s.*, p.verification_status as founder_verification_status
+         FROM public.startups s
+         JOIN public.profiles p ON s.founder_id = p.id
+         WHERE s.is_hidden = false
+           AND s.visibility != 'private'
+           AND p.verification_status::text IN ('verified', 'approved')`
       );
-    });
+      listedStartups = res.rows;
+    } else {
+      listedStartups = inMemoryDb.listStartups().filter((s) => {
+        if (s.is_hidden || s.visibility === 'private') return false;
+        const founder = inMemoryDb.getProfileById(s.founder_id);
+        return (
+          founder &&
+          (founder.verification_status === 'verified' ||
+            (founder.verification_status as string) === 'approved')
+        );
+      });
+    }
 
     const matches: RankedStartupMatch[] = [];
 

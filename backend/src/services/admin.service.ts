@@ -13,6 +13,7 @@ import type {
 } from '../schemas/admin.schema.js';
 import { getProfile } from './profile.service.js';
 import { config } from '../config.js';
+import { logger } from '../utils/logger.js';
 
 export async function logAdminAction(
   adminId: string,
@@ -33,7 +34,7 @@ export async function logAdminAction(
     created_at: new Date().toISOString(),
   };
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     try {
       await query(
         `INSERT INTO public.audit_logs (id, actor_id, action, target_type, target_id, metadata, created_at)
@@ -48,8 +49,8 @@ export async function logAdminAction(
           auditLog.created_at,
         ]
       );
-    } catch {
-      // Fallback in case actor_id / admin_id schema differs
+    } catch (err) {
+      logger.error({ err }, 'Failed to insert audit log in PostgreSQL');
     }
   } else {
     inMemoryDb.createAuditLog(auditLog);
@@ -65,7 +66,7 @@ export async function listUsers(params: ListUsersQuery): Promise<{
   const page = Math.max(1, params.page || 1);
   const limit = Math.min(100, Math.max(1, params.limit || 20));
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const conditions: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -134,7 +135,7 @@ export async function updateUserStatus(userId: string, input: UpdateUserStatusIn
     updated_at: new Date().toISOString(),
   };
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const sql = `
       UPDATE public.profiles SET
         status = $1,
@@ -197,7 +198,7 @@ export async function listAdminStartups(params: ListAdminStartupsQuery): Promise
   const page = Math.max(1, params.page || 1);
   const limit = Math.min(100, Math.max(1, params.limit || 20));
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const conditions: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -267,7 +268,7 @@ export async function hideStartup(startupId: string, adminId: string, reason?: s
 
   const hideReason = reason || 'Hidden by platform administrator';
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Startup>(
       `UPDATE public.startups SET is_hidden = true, updated_at = NOW() WHERE id = $1 RETURNING *;`,
       [startupId]
@@ -287,7 +288,7 @@ export async function unhideStartup(startupId: string, adminId: string): Promise
     throw new AppError('Startup not found', 404, 'NOT_FOUND');
   }
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Startup>(
       `UPDATE public.startups SET is_hidden = false, updated_at = NOW() WHERE id = $1 RETURNING *;`,
       [startupId]
@@ -307,7 +308,7 @@ export async function deleteStartupByAdmin(startupId: string, adminId: string): 
     throw new AppError('Startup not found', 404, 'NOT_FOUND');
   }
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     await query(`DELETE FROM public.startups WHERE id = $1`, [startupId]);
     await logAdminAction(adminId, 'STARTUP_DELETED', 'startup', startupId);
     return true;
@@ -326,7 +327,7 @@ export async function getAdminStats(): Promise<{
   open_reports: number;
   requests_last_30_days: number;
 }> {
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const rolesRes = await query<{ role: string; count: string }>(
       `SELECT role, COUNT(*) FROM public.profiles GROUP BY role;`
     );
@@ -386,7 +387,7 @@ export async function listAuditLogs(params: ListAuditLogsQuery): Promise<{
   const page = Math.max(1, params.page || 1);
   const limit = Math.min(100, Math.max(1, params.limit || 20));
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const conditions: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -445,7 +446,7 @@ export async function listVerificationRequests(params: ListVerificationsQuery): 
   const page = Math.max(1, params.page || 1);
   const limit = Math.min(100, Math.max(1, params.limit || 20));
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const conditions: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -511,7 +512,7 @@ export async function approveVerification(
 ): Promise<{ request: VerificationRequest; user: Profile }> {
   let reqItem: VerificationRequest | null = null;
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<VerificationRequest>(
       'SELECT * FROM public.verification_requests WHERE id = $1 LIMIT 1',
       [requestId]
@@ -540,7 +541,7 @@ export async function approveVerification(
   });
 
   let savedReq: VerificationRequest;
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const sql = `
       UPDATE public.verification_requests SET
         status = $1,
@@ -580,7 +581,7 @@ export async function rejectVerification(
 ): Promise<{ request: VerificationRequest; user: Profile }> {
   let reqItem: VerificationRequest | null = null;
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<VerificationRequest>(
       'SELECT * FROM public.verification_requests WHERE id = $1 LIMIT 1',
       [requestId]
@@ -609,7 +610,7 @@ export async function rejectVerification(
   });
 
   let savedReq: VerificationRequest;
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const sql = `
       UPDATE public.verification_requests SET
         status = $1,

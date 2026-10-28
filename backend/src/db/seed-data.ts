@@ -89,7 +89,7 @@ export const seedProfiles: Profile[] = [
 
   // Investors (3)
   {
-    id: 'i0000000-0000-0000-0000-000000000001',
+    id: 'b0000000-0000-0000-0000-000000000001',
     email: 'northstar@foundersden.test',
     full_name: 'Northstar Ventures',
     role: 'investor',
@@ -105,7 +105,7 @@ export const seedProfiles: Profile[] = [
     updated_at: '2026-10-20T10:00:00Z',
   },
   {
-    id: 'i0000000-0000-0000-0000-000000000002',
+    id: 'b0000000-0000-0000-0000-000000000002',
     email: 'blueseeds@foundersden.test',
     full_name: 'Blue Horizon Capital',
     role: 'investor',
@@ -121,7 +121,7 @@ export const seedProfiles: Profile[] = [
     updated_at: '2026-10-21T10:00:00Z',
   },
   {
-    id: 'i0000000-0000-0000-0000-000000000003',
+    id: 'b0000000-0000-0000-0000-000000000003',
     email: 'launchpad@foundersden.test',
     full_name: 'Launchpad Angels',
     role: 'investor',
@@ -139,7 +139,7 @@ export const seedProfiles: Profile[] = [
 
   // Mentors (2)
   {
-    id: 'm0000000-0000-0000-0000-000000000001',
+    id: 'd0000000-0000-0000-0000-000000000001',
     email: 'kavita@foundersden.test',
     full_name: 'Dr. Kavita Mehra',
     role: 'mentor',
@@ -155,7 +155,7 @@ export const seedProfiles: Profile[] = [
     updated_at: '2026-10-23T10:00:00Z',
   },
   {
-    id: 'm0000000-0000-0000-0000-000000000002',
+    id: 'd0000000-0000-0000-0000-000000000002',
     email: 'arjun@foundersden.test',
     full_name: 'Arjun Bedi',
     role: 'mentor',
@@ -237,7 +237,7 @@ export const seedFounderProfiles: FounderProfile[] = [
 // 3. INVESTOR PROFILES (satisfying ticket_min <= ticket_max)
 export const seedInvestorProfiles: InvestorProfile[] = [
   {
-    user_id: 'i0000000-0000-0000-0000-000000000001',
+    user_id: 'b0000000-0000-0000-0000-000000000001',
     firm_name: 'Northstar Ventures',
     sectors: ['AgriTech', 'Climate Tech', 'AI'],
     stages: ['Pre-seed', 'Seed'],
@@ -251,7 +251,7 @@ export const seedInvestorProfiles: InvestorProfile[] = [
     updated_at: '2026-10-20T10:00:00Z',
   },
   {
-    user_id: 'i0000000-0000-0000-0000-000000000002',
+    user_id: 'b0000000-0000-0000-0000-000000000002',
     firm_name: 'Blue Horizon Capital',
     sectors: ['FinTech', 'EdTech', 'SaaS'],
     stages: ['Seed', 'Early traction'],
@@ -265,7 +265,7 @@ export const seedInvestorProfiles: InvestorProfile[] = [
     updated_at: '2026-10-21T10:00:00Z',
   },
   {
-    user_id: 'i0000000-0000-0000-0000-000000000003',
+    user_id: 'b0000000-0000-0000-0000-000000000003',
     firm_name: 'Launchpad Angels',
     sectors: ['HealthTech', 'AI', 'DeepTech'],
     stages: ['Idea', 'MVP'],
@@ -283,7 +283,7 @@ export const seedInvestorProfiles: InvestorProfile[] = [
 // 4. MENTOR PROFILES
 export const seedMentorProfiles: MentorProfile[] = [
   {
-    user_id: 'm0000000-0000-0000-0000-000000000001',
+    user_id: 'd0000000-0000-0000-0000-000000000001',
     expertise: ['AgriTech', 'Rural Distribution', 'Grant Funding', 'Field Pilots'],
     experience: 12,
     linkedin_url: 'https://linkedin.com/in/kavitamehra-demo',
@@ -292,7 +292,7 @@ export const seedMentorProfiles: MentorProfile[] = [
     updated_at: '2026-10-23T10:00:00Z',
   },
   {
-    user_id: 'm0000000-0000-0000-0000-000000000002',
+    user_id: 'd0000000-0000-0000-0000-000000000002',
     expertise: ['SaaS Growth', 'Product Management', 'Go-to-market', 'Pricing'],
     experience: 10,
     linkedin_url: 'https://linkedin.com/in/arjunbedi-demo',
@@ -328,7 +328,7 @@ export const seedIncubatorProfiles: IncubatorProfile[] = [
 export const seedStartups: Startup[] = [
   // Startup 1: FarmSense - AgriTech MVP in Punjab asking 15 lakh INR
   {
-    id: 's0000000-0000-0000-0000-000000000001',
+    id: 'e0000000-0000-0000-0000-000000000001',
     founder_id: 'f0000000-0000-0000-0000-000000000001',
     name: 'FarmSense',
     tagline: 'Practical intelligence for every farmer.',
@@ -347,7 +347,7 @@ export const seedStartups: Startup[] = [
 
   // Startup 2: AgriDrone Punjab - AgriTech / Clean Energy Idea in Punjab
   {
-    id: 's0000000-0000-0000-0000-000000000002',
+    id: 'e0000000-0000-0000-0000-000000000002',
     founder_id: 'f0000000-0000-0000-0000-000000000001',
     name: 'AgriDrone Punjab',
     tagline: 'Precision drone spraying cooperatives.',
@@ -366,7 +366,7 @@ export const seedStartups: Startup[] = [
 
   // Startup 3: Medora AI - HealthTech Early Traction in Delhi
   {
-    id: 's0000000-0000-0000-0000-000000000003',
+    id: 'e0000000-0000-0000-0000-000000000003',
     founder_id: 'f0000000-0000-0000-0000-000000000002',
     name: 'Medora AI',
     tagline: 'Earlier signals. Better healthcare outcomes.',
@@ -385,7 +385,7 @@ export const seedStartups: Startup[] = [
 
   // Startup 4: TerraLoop - Climate Tech MVP in Punjab
   {
-    id: 's0000000-0000-0000-0000-000000000004',
+    id: 'e0000000-0000-0000-0000-000000000004',
     founder_id: 'f0000000-0000-0000-0000-000000000003',
     name: 'TerraLoop',
     tagline: 'Turning agricultural waste into high-grade packaging.',
@@ -404,7 +404,7 @@ export const seedStartups: Startup[] = [
 
   // Startup 5: SkillSpring - EdTech Validation in Pune
   {
-    id: 's0000000-0000-0000-0000-000000000005',
+    id: 'e0000000-0000-0000-0000-000000000005',
     founder_id: 'f0000000-0000-0000-0000-000000000003',
     name: 'SkillSpring',
     tagline: 'Practical apprentice matching for emerging engineers.',
@@ -426,7 +426,7 @@ export const seedStartups: Startup[] = [
 export const seedIncubatorPrograms: IncubatorProgram[] = [
   // Incubator 1 (Punjab Innovation Hub)
   {
-    id: 'p0000000-0000-0000-0000-000000000001',
+    id: '90000000-0000-0000-0000-000000000001',
     incubator_id: 'c0000000-0000-0000-0000-000000000001',
     name: 'Campus Founders Fellowship',
     description: 'A 6-month pre-incubation program for student innovators and campus founders across Punjab universities.',
@@ -439,7 +439,7 @@ export const seedIncubatorPrograms: IncubatorProgram[] = [
     updated_at: '2026-10-13T10:00:00Z',
   },
   {
-    id: 'p0000000-0000-0000-0000-000000000002',
+    id: '90000000-0000-0000-0000-000000000002',
     incubator_id: 'c0000000-0000-0000-0000-000000000001',
     name: 'Punjab Agri-Innovation Launchpad',
     description: 'Dedicated commercialization track for tech startups modernizing Punjab farming, irrigation, and storage.',
@@ -454,7 +454,7 @@ export const seedIncubatorPrograms: IncubatorProgram[] = [
 
   // Incubator 2 (ClimateX Accelerator)
   {
-    id: 'p0000000-0000-0000-0000-000000000003',
+    id: '90000000-0000-0000-0000-000000000003',
     incubator_id: 'c0000000-0000-0000-0000-000000000002',
     name: 'Net-Zero Scale Accelerator',
     description: 'Flagship acceleration program for biomass recycling, circular manufacturing, and solar innovations.',
@@ -472,8 +472,8 @@ export const seedIncubatorPrograms: IncubatorProgram[] = [
 export const seedApplications: Application[] = [
   {
     id: 'b0000000-0000-0000-0000-000000000001',
-    program_id: 'p0000000-0000-0000-0000-000000000001', // Campus Founders Fellowship
-    startup_id: 's0000000-0000-0000-0000-000000000001', // FarmSense
+    program_id: '90000000-0000-0000-0000-000000000001', // Campus Founders Fellowship
+    startup_id: 'e0000000-0000-0000-0000-000000000001', // FarmSense
     founder_id: 'f0000000-0000-0000-0000-000000000001',
     pitch_summary: 'FarmSense offers AI soil advisory for 200+ piloted farms in Punjab; seeking fellowship grant for hardware sensor pilots.',
     status: 'under_review',
@@ -483,8 +483,8 @@ export const seedApplications: Application[] = [
   },
   {
     id: 'b0000000-0000-0000-0000-000000000002',
-    program_id: 'p0000000-0000-0000-0000-000000000003', // Net-Zero Scale
-    startup_id: 's0000000-0000-0000-0000-000000000004', // TerraLoop
+    program_id: '90000000-0000-0000-0000-000000000003', // Net-Zero Scale
+    startup_id: 'e0000000-0000-0000-0000-000000000004', // TerraLoop
     founder_id: 'f0000000-0000-0000-0000-000000000003',
     pitch_summary: 'Converting 50 tons of stubble biomass into packaging crates; applying for industrial testing partners.',
     status: 'shortlisted',
@@ -498,10 +498,10 @@ export const seedApplications: Application[] = [
 export const seedDocuments: Document[] = [
   {
     id: 'd0000000-0000-0000-0000-000000000001',
-    startup_id: 's0000000-0000-0000-0000-000000000001',
+    startup_id: 'e0000000-0000-0000-0000-000000000001',
     uploader_id: 'f0000000-0000-0000-0000-000000000001',
     title: 'FarmSense_Pitch_Deck_v1.pdf',
-    file_path: 'startups/s0000000-0000-0000-0000-000000000001/decks/v1.pdf',
+    file_path: 'startups/e0000000-0000-0000-0000-000000000001/decks/v1.pdf',
     file_type: 'application/pdf',
     file_size: 2450000,
     version: 1,
@@ -511,10 +511,10 @@ export const seedDocuments: Document[] = [
   },
   {
     id: 'd0000000-0000-0000-0000-000000000002',
-    startup_id: 's0000000-0000-0000-0000-000000000001',
+    startup_id: 'e0000000-0000-0000-0000-000000000001',
     uploader_id: 'f0000000-0000-0000-0000-000000000001',
     title: 'FarmSense_Financial_Projections_Private.pdf',
-    file_path: 'startups/s0000000-0000-0000-0000-000000000001/financials/v1.pdf',
+    file_path: 'startups/e0000000-0000-0000-0000-000000000001/financials/v1.pdf',
     file_type: 'application/pdf',
     file_size: 840000,
     version: 1,
@@ -527,18 +527,18 @@ export const seedDocuments: Document[] = [
 // 10. WATCHLIST & PRIVATE NOTES
 export const seedWatchlist: WatchlistEntry[] = [
   {
-    id: 'w0000000-0000-0000-0000-000000000001',
-    investor_id: 'i0000000-0000-0000-0000-000000000001', // Northstar Ventures
-    startup_id: 's0000000-0000-0000-0000-000000000001',  // FarmSense
+    id: 'a1000000-0000-0000-0000-000000000001',
+    investor_id: 'b0000000-0000-0000-0000-000000000001', // Northstar Ventures
+    startup_id: 'e0000000-0000-0000-0000-000000000001',  // FarmSense
     created_at: '2026-10-25T14:00:00Z',
   },
 ];
 
 export const seedInvestorNotes: InvestorNote[] = [
   {
-    id: 'n0000000-0000-0000-0000-000000000001',
-    investor_id: 'i0000000-0000-0000-0000-000000000001', // Northstar Ventures
-    startup_id: 's0000000-0000-0000-0000-000000000001',  // FarmSense
+    id: 'a2000000-0000-0000-0000-000000000001',
+    investor_id: 'b0000000-0000-0000-0000-000000000001', // Northstar Ventures
+    startup_id: 'e0000000-0000-0000-0000-000000000001',  // FarmSense
     note: 'Strong founder pedigree at Punjab Agri University. Pilot metrics in Ludhiana show 18% cost reduction for wheat farmers. Follow up for Series Seed discussion.',
     created_at: '2026-10-25T14:05:00Z',
     updated_at: '2026-10-25T14:05:00Z',
@@ -548,17 +548,17 @@ export const seedInvestorNotes: InvestorNote[] = [
 // 11. MESSAGES (Participants only)
 export const seedMessages: Message[] = [
   {
-    id: 'x0000000-0000-0000-0000-000000000001',
-    sender_id: 'i0000000-0000-0000-0000-000000000001', // Northstar Ventures
+    id: 'a3000000-0000-0000-0000-000000000001',
+    sender_id: 'b0000000-0000-0000-0000-000000000001', // Northstar Ventures
     recipient_id: 'f0000000-0000-0000-0000-000000000001', // Manmeet Singh
     content: 'Hi Manmeet, we reviewed your FarmSense overview and would like to learn more about your pilot numbers in Ludhiana.',
     read_at: '2026-10-25T15:00:00Z',
     created_at: '2026-10-25T14:30:00Z',
   },
   {
-    id: 'x0000000-0000-0000-0000-000000000002',
+    id: 'a3000000-0000-0000-0000-000000000002',
     sender_id: 'f0000000-0000-0000-0000-000000000001',
-    recipient_id: 'i0000000-0000-0000-0000-000000000001',
+    recipient_id: 'b0000000-0000-0000-0000-000000000001',
     content: 'Thank you for reaching out! Happy to share our 200-farm pilot data and discuss our ₹15L seed round.',
     read_at: null,
     created_at: '2026-10-25T15:15:00Z',

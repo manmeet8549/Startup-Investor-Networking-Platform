@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { app } from '../app.js';
@@ -7,6 +7,17 @@ import { generateToken } from '../middleware/auth.middleware.js';
 import { config } from '../config.js';
 
 describe('Iteration 3: Authentication, roles and verification', () => {
+  let origDbMode: boolean;
+  beforeAll(() => {
+    origDbMode = config.USE_IN_MEMORY_DB;
+    (config as any).USE_IN_MEMORY_DB = true;
+    (config as any).dbMode = 'in-memory';
+  });
+  afterAll(() => {
+    (config as any).USE_IN_MEMORY_DB = origDbMode;
+    (config as any).dbMode = origDbMode ? 'in-memory' : 'postgres';
+  });
+
   const adminToken = generateToken({
     sub: 'a0000000-0000-0000-0000-000000000001',
     email: 'admin@foundersden.test',
@@ -17,6 +28,7 @@ describe('Iteration 3: Authentication, roles and verification', () => {
   });
 
   describe('Task 2 & Tests: User Registration Per Role & Admin Rejection', () => {
+
     it('registers founder successfully and marks verified immediately', async () => {
       const res = await request(app).post('/api/v1/auth/register-profile').send({
         email: 'founder.new@test.com',
@@ -165,7 +177,7 @@ describe('Iteration 3: Authentication, roles and verification', () => {
 
     it('gets and puts /me/investor-profile', async () => {
       const token = generateToken({
-        sub: 'i0000000-0000-0000-0000-000000000001',
+        sub: 'b0000000-0000-0000-0000-000000000001',
         email: 'investor@foundersden.test',
       });
 
@@ -174,7 +186,7 @@ describe('Iteration 3: Authentication, roles and verification', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(getRes.status).toBe(200);
-      expect(getRes.body.data.user_id).toBe('i0000000-0000-0000-0000-000000000001');
+      expect(getRes.body.data.user_id).toBe('b0000000-0000-0000-0000-000000000001');
 
       const putRes = await request(app)
         .put('/api/v1/me/investor-profile')
@@ -196,7 +208,7 @@ describe('Iteration 3: Authentication, roles and verification', () => {
 
     it('gets and puts /me/mentor-profile', async () => {
       const token = generateToken({
-        sub: 'm0000000-0000-0000-0000-000000000001',
+        sub: 'd0000000-0000-0000-0000-000000000001',
         email: 'mentor@foundersden.test',
       });
 

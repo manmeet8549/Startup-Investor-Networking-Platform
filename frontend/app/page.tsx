@@ -558,7 +558,7 @@ export default function Home(){
 
  // Live Founder Workspace State for Iteration 4
  const [currentStartup, setCurrentStartup] = useState<any>({
-   id: 's0000000-0000-0000-0000-000000000001',
+   id: 'e0000000-0000-0000-0000-000000000001',
    name: 'FarmSense',
    tagline: 'Practical intelligence for every farmer.',
    sector: 'AgriTech',
@@ -633,7 +633,7 @@ export default function Home(){
     try {
       setFounderMatchesLoading(true);
       setFounderMatchesError(null);
-      const stId = targetStartupId || currentStartup?.id || 's0000000-0000-0000-0000-000000000001';
+      const stId = targetStartupId || currentStartup?.id || 'e0000000-0000-0000-0000-000000000001';
       const res = await apiClient.get<any[]>(`/matches/investors?startup_id=${stId}`);
       if (res && res.data) {
         setFounderMatches(res.data);
@@ -643,7 +643,7 @@ export default function Home(){
       setFounderMatchesError(err.message || 'Unable to load live investor matches');
       setFounderMatches([
         {
-          investor_id: 'i0000000-0000-0000-0000-000000000001',
+          investor_id: 'b0000000-0000-0000-0000-000000000001',
           firm_name: 'Northstar Ventures',
           location: 'Chandigarh, Punjab, India',
           sectors: ['AgriTech', 'Climate Tech'],
@@ -662,7 +662,7 @@ export default function Home(){
           disclaimer: 'The score measures profile compatibility, not the probability of funding.'
         },
         {
-          investor_id: 'i0000000-0000-0000-0000-000000000003',
+          investor_id: 'b0000000-0000-0000-0000-000000000003',
           firm_name: 'Launchpad Angels',
           location: 'Bengaluru, Karnataka, India',
           sectors: ['AgriTech', 'HealthTech', 'AI / ML'],
@@ -680,7 +680,7 @@ export default function Home(){
           disclaimer: 'The score measures profile compatibility, not the probability of funding.'
         },
         {
-          investor_id: 'i0000000-0000-0000-0000-000000000002',
+          investor_id: 'b0000000-0000-0000-0000-000000000002',
           firm_name: 'Blue Horizon Capital',
           location: 'Mumbai, Maharashtra, India',
           sectors: ['FinTech', 'B2B SaaS'],
@@ -716,7 +716,7 @@ export default function Home(){
       setInvestorMatchesError(err.message || 'Unable to load recommended startups');
       setInvestorMatches([
         {
-          startup_id: 's0000000-0000-0000-0000-000000000001',
+          startup_id: 'e0000000-0000-0000-0000-000000000001',
           name: 'FarmSense',
           tagline: 'Practical intelligence for every farmer.',
           sectors: ['AgriTech', 'Climate Tech'],
@@ -736,7 +736,7 @@ export default function Home(){
           disclaimer: 'The score measures profile compatibility, not the probability of funding.'
         },
         {
-          startup_id: 's0000000-0000-0000-0000-000000000002',
+          startup_id: 'e0000000-0000-0000-0000-000000000002',
           name: 'TerraLoop',
           tagline: 'Circular-economy crop residue packaging.',
           sectors: ['Climate Tech', 'Clean Energy'],
@@ -755,7 +755,7 @@ export default function Home(){
           disclaimer: 'The score measures profile compatibility, not the probability of funding.'
         },
         {
-          startup_id: 's0000000-0000-0000-0000-000000000003',
+          startup_id: 'e0000000-0000-0000-0000-000000000003',
           name: 'Medora AI',
           tagline: 'Earlier signals. Better healthcare outcomes.',
           sectors: ['HealthTech', 'AI / ML'],
@@ -1200,7 +1200,7 @@ export default function Home(){
 
       setTimeout(() => setUploadProgress(70), 200);
 
-      const targetStartupId = currentStartup?.id || 's0000000-0000-0000-0000-000000000001';
+      const targetStartupId = currentStartup?.id || 'e0000000-0000-0000-0000-000000000001';
       const res = await apiClient.upload<any>(`/startups/${targetStartupId}/documents`, formData);
       setUploadProgress(100);
 
@@ -1272,7 +1272,7 @@ export default function Home(){
 
   const handleAddTeamMember = async (form: any) => {
     try {
-      const targetStartupId = currentStartup?.id || 's0000000-0000-0000-0000-000000000001';
+      const targetStartupId = currentStartup?.id || 'e0000000-0000-0000-0000-000000000001';
       const res = await apiClient.post<any>(`/startups/${targetStartupId}/team-members`, form);
       if (res && res.data) {
         setTeamMembers((prev) => [...prev, res.data]);
@@ -1294,7 +1294,7 @@ export default function Home(){
   const handleDeleteTeamMember = async (memberId: string, name: string) => {
     if (!window.confirm(`Remove ${name} from startup team?`)) return;
     try {
-      const targetStartupId = currentStartup?.id || 's0000000-0000-0000-0000-000000000001';
+      const targetStartupId = currentStartup?.id || 'e0000000-0000-0000-0000-000000000001';
       await apiClient.delete(`/startups/${targetStartupId}/team-members/${memberId}`);
       setTeamMembers((prev) => prev.filter((m) => m.id !== memberId));
       notify(`${name} removed from team.`);
@@ -2407,7 +2407,7 @@ export default function Home(){
 
   if (page === 'Mentors') {
     const founderStartupsList = startups.filter((s: any) => s.founder_id === auth.user?.id || s.id === currentStartup?.id);
-    const rawList = founderStartupsList.length > 0 ? founderStartupsList : [{ id: currentStartup?.id || 's0000000-0000-0000-0000-000000000001', name: currentStartup?.name || 'FarmSense' }];
+    const rawList = founderStartupsList.length > 0 ? founderStartupsList : [{ id: currentStartup?.id || 'e0000000-0000-0000-0000-000000000001', name: currentStartup?.name || 'FarmSense' }];
     const availableStartups = rawList.map((s: any) => ({ id: String(s.id), name: String(s.name) }));
     return (
       <FounderMentorsView
@@ -2419,7 +2419,7 @@ export default function Home(){
 
   if (page === 'Incubators & Applications') {
     const founderStartupsList = startups.filter((s: any) => s.founder_id === auth.user?.id || s.id === currentStartup?.id);
-    const rawList = founderStartupsList.length > 0 ? founderStartupsList : [{ id: currentStartup?.id || 's0000000-0000-0000-0000-000000000001', name: currentStartup?.name || 'FarmSense' }];
+    const rawList = founderStartupsList.length > 0 ? founderStartupsList : [{ id: currentStartup?.id || 'e0000000-0000-0000-0000-000000000001', name: currentStartup?.name || 'FarmSense' }];
     const availableStartups = rawList.map((s: any) => ({ id: String(s.id), name: String(s.name) }));
     return (
       <FounderIncubatorsView

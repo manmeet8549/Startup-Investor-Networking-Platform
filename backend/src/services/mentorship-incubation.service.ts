@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
-import { inMemoryDb } from '../db/index.js';
+import { inMemoryDb, query } from '../db/index.js';
+import { config } from '../config.js';
 import type {
   MentorshipRequest,
   MentorFeedback,
@@ -545,15 +546,53 @@ export class ApplicationService {
 // ==========================================
 export class NotificationRetrievalService {
   async listNotifications(userId: string): Promise<Notification[]> {
+    if (!config.USE_IN_MEMORY_DB) {
+      const res = await query<Notification>(
+        `SELECT id, user_id, title, message, type, payload, link, read, created_at
+         FROM public.notifications
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [userId]
+      );
+      return res.rows;
+    }
     return inMemoryDb.listNotifications(userId);
   }
 
   async getUnreadCount(userId: string): Promise<{ count: number; unread_count: number }> {
+    if (!config.USE_IN_MEMORY_DB) {
+      const res = await query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM public.notifications WHERE user_id = $1 AND read = false`,
+        [userId]
+      );
+      const count = parseInt(res.rows[0]?.count || '0', 10);
+      return { count, unread_count: count };
+    }
     const count = inMemoryDb.getUnreadNotificationsCount(userId);
     return { count, unread_count: count };
   }
 
   async markAsRead(userId: string, notificationId: string): Promise<Notification> {
+    if (!config.USE_IN_MEMORY_DB) {
+      const checkRes = await query<Notification>(
+        `SELECT * FROM public.notifications WHERE id = $1`,
+        [notificationId]
+      );
+      if (checkRes.rows.length === 0) {
+        throw new AppError('Notification not found', 404, 'NOT_FOUND');
+      }
+      if (checkRes.rows[0].user_id !== userId) {
+        throw new AppError('Forbidden: notification belongs to another user', 403, 'FORBIDDEN_RESOURCE');
+      }
+      const updateRes = await query<Notification>(
+        `UPDATE public.notifications SET read = true WHERE id = $1 AND user_id = $2 RETURNING *`,
+        [notificationId, userId]
+      );
+      inMemoryDb.markNotificationAsRead(notificationId, userId);
+      const row = updateRes.rows[0];
+      return { ...row, read: true, is_read: true };
+    }
+
     const notif = inMemoryDb.notifications.get(notificationId);
     if (!notif) {
       throw new AppError('Notification not found', 404, 'NOT_FOUND');
@@ -564,10 +603,18 @@ export class NotificationRetrievalService {
     }
 
     const updated = inMemoryDb.markNotificationAsRead(notificationId, userId);
-    return updated!;
+    return { ...updated!, read: true, is_read: true };
   }
 
   async markAllAsRead(userId: string): Promise<{ marked_count: number }> {
+    if (!config.USE_IN_MEMORY_DB) {
+      const updateRes = await query(
+        `UPDATE public.notifications SET read = true WHERE user_id = $1 AND read = false`,
+        [userId]
+      );
+      inMemoryDb.markAllNotificationsAsRead(userId);
+      return { marked_count: updateRes.rowCount || 0 };
+    }
     const count = inMemoryDb.markAllNotificationsAsRead(userId);
     return { marked_count: count };
   }

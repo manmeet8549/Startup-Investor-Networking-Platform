@@ -37,8 +37,11 @@ export interface HealthCheckData {
   version: string;
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+const sanitizedApiUrl = rawApiUrl.replace(/\/+$/, '');
+const API_BASE_URL = sanitizedApiUrl.endsWith('/api/v1')
+  ? sanitizedApiUrl
+  : `${sanitizedApiUrl}/api/v1`;
 
 let authToken: string | null = null;
 
@@ -85,14 +88,22 @@ async function request<T>(
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== 'undefined') {
+    const isAuthEndpoint = endpoint.startsWith('/auth') || endpoint === '/me' || endpoint === 'me';
+    const isRetry = Boolean((options as Record<string, unknown>)._isRetry);
+
+    if (response.status === 401 && !isAuthEndpoint && !isRetry && typeof window !== 'undefined') {
       try {
         const { supabase } = await import('./supabase');
         const { data } = await supabase.auth.refreshSession();
         if (data?.session?.access_token) {
           setAuthToken(data.session.access_token);
           headers['Authorization'] = `Bearer ${data.session.access_token}`;
-          const retryRes = await fetch(url, { ...options, headers });
+          const retryRes = await fetch(url, {
+            ...options,
+            headers,
+            // @ts-expect-error internal flag to prevent retry loops
+            _isRetry: true,
+          });
           if (retryRes.ok) {
             return (await retryRes.json()) as ApiResponse<T>;
           }

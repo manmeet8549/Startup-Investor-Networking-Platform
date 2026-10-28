@@ -3,8 +3,9 @@ import { validateBody } from '../middleware/validate.middleware.js';
 import { registerSchema, registerProfileSchema, loginSchema, updateProfileSchema } from '../schemas/auth.schema.js';
 import * as authService from '../services/auth.service.js';
 import * as profileService from '../services/profile.service.js';
-import { authenticate } from '../middleware/auth.middleware.js';
-
+import { authenticate, verifyAuthToken } from '../middleware/auth.middleware.js';
+import { AppError } from '../middleware/error.middleware.js';
+import { config } from '../config.js';
 import { authLimiter } from '../middleware/rate-limit.middleware.js';
 
 export const authRouter = Router();
@@ -12,7 +13,20 @@ authRouter.use('/auth', authLimiter);
 
 authRouter.post('/auth/register-profile', validateBody(registerProfileSchema), async (req, res, next) => {
   try {
-    const result = await authService.registerProfile(req.body);
+    const authHeader = req.headers.authorization;
+    if (!config.USE_IN_MEMORY_DB && (!authHeader || !authHeader.startsWith('Bearer '))) {
+      throw new AppError('Authorization header with Bearer token is required to register a profile', 401, 'UNAUTHORIZED');
+    }
+    let tokenUserId: string | undefined;
+    let tokenEmail: string | undefined;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const authInfo = await verifyAuthToken(token);
+      tokenUserId = authInfo.userId;
+      tokenEmail = authInfo.email;
+    }
+
+    const result = await authService.registerProfile(req.body, tokenUserId, tokenEmail);
     res.status(201).json({
       data: result,
     });

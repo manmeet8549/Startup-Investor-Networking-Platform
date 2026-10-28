@@ -1,15 +1,27 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { config } from '../config.js';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 import { inMemoryDb } from '../db/index.js';
 import { generateToken } from '../middleware/auth.middleware.js';
 
 describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () => {
+  let origDbMode: boolean;
+  beforeAll(() => {
+    origDbMode = config.USE_IN_MEMORY_DB;
+    (config as any).USE_IN_MEMORY_DB = true;
+    (config as any).dbMode = 'in-memory';
+  });
+  afterAll(() => {
+    (config as any).USE_IN_MEMORY_DB = origDbMode;
+    (config as any).dbMode = origDbMode ? 'in-memory' : 'postgres';
+  });
+
   const adminId = 'a0000000-0000-0000-0000-000000000001';
   const founderId = 'f0000000-0000-0000-0000-000000000001';
   const founder2Id = 'f0000000-0000-0000-0000-000000000002';
-  const investorId = 'i0000000-0000-0000-0000-000000000001';
-  const mentorId = 'm0000000-0000-0000-0000-000000000001';
+  const investorId = 'b0000000-0000-0000-0000-000000000001';
+  const mentorId = 'd0000000-0000-0000-0000-000000000001';
   const incubatorId = 'c0000000-0000-0000-0000-000000000001';
 
   const adminToken = generateToken({ sub: adminId, email: 'admin@foundersden.test', role: 'admin' });
@@ -25,15 +37,16 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
 
   // TASK 1 & TESTS: Non-admins get 403 on every /admin route
   describe('RBAC Guard: Non-admins get 403 on every /admin route', () => {
+
     const adminRoutes: Array<{ method: 'get' | 'post' | 'patch' | 'delete'; path: string; body?: any }> = [
       { method: 'get', path: '/api/v1/admin/users' },
       { method: 'post', path: `/api/v1/admin/users/${founderId}/suspend`, body: { reason: 'Test' } },
       { method: 'post', path: `/api/v1/admin/users/${founderId}/reactivate`, body: { reason: 'Test' } },
       { method: 'patch', path: `/api/v1/admin/users/${founderId}/status`, body: { status: 'active' } },
       { method: 'get', path: '/api/v1/admin/startups' },
-      { method: 'post', path: '/api/v1/admin/startups/s0000000-0000-0000-0000-000000000001/hide', body: { reason: 'Test' } },
-      { method: 'post', path: '/api/v1/admin/startups/s0000000-0000-0000-0000-000000000001/unhide' },
-      { method: 'delete', path: '/api/v1/admin/startups/s0000000-0000-0000-0000-000000000001' },
+      { method: 'post', path: '/api/v1/admin/startups/e0000000-0000-0000-0000-000000000001/hide', body: { reason: 'Test' } },
+      { method: 'post', path: '/api/v1/admin/startups/e0000000-0000-0000-0000-000000000001/unhide' },
+      { method: 'delete', path: '/api/v1/admin/startups/e0000000-0000-0000-0000-000000000001' },
       { method: 'get', path: '/api/v1/admin/reports' },
       { method: 'post', path: '/api/v1/admin/reports/00000000-0000-0000-0000-000000000001/resolve', body: { note: 'Resolved' } },
       { method: 'post', path: '/api/v1/admin/reports/00000000-0000-0000-0000-000000000001/dismiss', body: { note: 'Dismissed' } },
@@ -92,7 +105,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
       const beforeDisc = await request(app).get('/api/v1/startups');
       expect(beforeDisc.status).toBe(200);
       const startupFound = beforeDisc.body.data.some(
-        (s: any) => s.id === 's0000000-0000-0000-0000-000000000002'
+        (s: any) => s.id === 'e0000000-0000-0000-0000-000000000002'
       );
       expect(startupFound).toBe(true);
 
@@ -124,7 +137,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
         .set('Authorization', `Bearer ${founderToken}`)
         .send({
           target_type: 'startup',
-          target_id: 's0000000-0000-0000-0000-000000000003',
+          target_id: 'e0000000-0000-0000-0000-000000000003',
           reason: 'Spam test',
         });
       expect(reportAttempt.status).toBe(403);
@@ -134,7 +147,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
       const afterDisc = await request(app).get('/api/v1/startups');
       expect(afterDisc.status).toBe(200);
       const startupGone = afterDisc.body.data.some(
-        (s: any) => s.id === 's0000000-0000-0000-0000-000000000002'
+        (s: any) => s.id === 'e0000000-0000-0000-0000-000000000002'
       );
       expect(startupGone).toBe(false);
 
@@ -156,7 +169,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
       // 8. Startup reappears in discovery
       const restoredDisc = await request(app).get('/api/v1/startups');
       const startupBack = restoredDisc.body.data.some(
-        (s: any) => s.id === 's0000000-0000-0000-0000-000000000002'
+        (s: any) => s.id === 'e0000000-0000-0000-0000-000000000002'
       );
       expect(startupBack).toBe(true);
     });
@@ -175,7 +188,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
     });
 
     it('POST hide hides startup from discovery; unhide restores it', async () => {
-      const startupId = 's0000000-0000-0000-0000-000000000003'; // Medora AI (public)
+      const startupId = 'e0000000-0000-0000-0000-000000000003'; // Medora AI (public)
 
       // 1. Visible initially
       const initDisc = await request(app).get('/api/v1/startups');
@@ -208,7 +221,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
     });
 
     it('DELETE /admin/startups/:id permanently deletes listing', async () => {
-      const startupId = 's0000000-0000-0000-0000-000000000005'; // SkillSpring
+      const startupId = 'e0000000-0000-0000-0000-000000000005'; // SkillSpring
 
       const delRes = await request(app)
         .delete(`/api/v1/admin/startups/${startupId}`)
@@ -231,7 +244,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
         .set('Authorization', `Bearer ${founderToken}`)
         .send({
           target_type: 'startup',
-          target_id: 's0000000-0000-0000-0000-000000000002',
+          target_id: 'e0000000-0000-0000-0000-000000000002',
           reason: 'Inaccurate stage and claims',
           details: 'Founder claims working hardware but pilot is still in prototype.',
         });
@@ -311,7 +324,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
         .set('Authorization', `Bearer ${unverifiedToken}`)
         .send({
           target_type: 'startup',
-          target_id: 's0000000-0000-0000-0000-000000000001',
+          target_id: 'e0000000-0000-0000-0000-000000000001',
           reason: 'Test report',
         });
 
@@ -358,13 +371,13 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
         .set('Authorization', `Bearer ${founderToken}`)
         .send({
           target_type: 'startup',
-          target_id: 's0000000-0000-0000-0000-000000000001',
+          target_id: 'e0000000-0000-0000-0000-000000000001',
           reason: 'Duplicate listing',
         });
 
       // 2. Hide a startup
       await request(app)
-        .post('/api/v1/admin/startups/s0000000-0000-0000-0000-000000000001/hide')
+        .post('/api/v1/admin/startups/e0000000-0000-0000-0000-000000000001/hide')
         .set('Authorization', `Bearer ${adminToken}`);
 
       const res = await request(app)
@@ -392,7 +405,7 @@ describe('Iteration 9: Admin, Moderation, Reports and Platform Protection', () =
         .send({ reason: 'Audit test reactivation' });
 
       await request(app)
-        .post('/api/v1/admin/startups/s0000000-0000-0000-0000-000000000004/hide')
+        .post('/api/v1/admin/startups/e0000000-0000-0000-0000-000000000004/hide')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ reason: 'Audit test hide' });
 

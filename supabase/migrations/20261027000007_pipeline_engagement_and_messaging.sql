@@ -42,12 +42,14 @@ ALTER TABLE public.pitch_request_messages ENABLE ROW LEVEL SECURITY;
 
 -- 5. RLS Policies
 -- Pipeline history: visible only to the investor who owns it or admin
+DROP POLICY IF EXISTS pipeline_history_owner_select ON public.pipeline_history;
 CREATE POLICY pipeline_history_owner_select ON public.pipeline_history
     FOR SELECT TO authenticated
     USING (investor_id = auth.uid() OR EXISTS (
         SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
     ));
 
+DROP POLICY IF EXISTS pipeline_history_owner_insert ON public.pipeline_history;
 CREATE POLICY pipeline_history_owner_insert ON public.pipeline_history
     FOR INSERT TO authenticated
     WITH CHECK (investor_id = auth.uid() OR EXISTS (
@@ -55,6 +57,7 @@ CREATE POLICY pipeline_history_owner_insert ON public.pipeline_history
     ));
 
 -- Pitch request messages: visible to participants of the pitch request
+DROP POLICY IF EXISTS pitch_request_messages_participants_select ON public.pitch_request_messages;
 CREATE POLICY pitch_request_messages_participants_select ON public.pitch_request_messages
     FOR SELECT TO authenticated
     USING (
@@ -69,6 +72,7 @@ CREATE POLICY pitch_request_messages_participants_select ON public.pitch_request
         )
     );
 
+DROP POLICY IF EXISTS pitch_request_messages_participants_insert ON public.pitch_request_messages;
 CREATE POLICY pitch_request_messages_participants_insert ON public.pitch_request_messages
     FOR INSERT TO authenticated
     WITH CHECK (

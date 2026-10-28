@@ -45,6 +45,12 @@ next-env.d.ts
 coverage/
 */coverage/
 .vitest/
+playwright-report/
+*/playwright-report/
+test-results/
+*/test-results/
+scratch/
+*/scratch/
 
 # IDE & OS files
 .DS_Store

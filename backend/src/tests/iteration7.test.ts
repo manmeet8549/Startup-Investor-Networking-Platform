@@ -1,18 +1,30 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { config } from '../config.js';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 import { inMemoryDb } from '../db/index.js';
 import { generateToken } from '../middleware/auth.middleware.js';
 
 describe('Iteration 7: Investor engagement, connections and messaging', () => {
-  const investor1Id = 'i0000000-0000-0000-0000-000000000001'; // Northstar Ventures
-  const investor2Id = 'i0000000-0000-0000-0000-000000000002'; // Blue Horizon Capital
+  let origDbMode: boolean;
+  beforeAll(() => {
+    origDbMode = config.USE_IN_MEMORY_DB;
+    (config as any).USE_IN_MEMORY_DB = true;
+    (config as any).dbMode = 'in-memory';
+  });
+  afterAll(() => {
+    (config as any).USE_IN_MEMORY_DB = origDbMode;
+    (config as any).dbMode = origDbMode ? 'in-memory' : 'postgres';
+  });
+
+  const investor1Id = 'b0000000-0000-0000-0000-000000000001'; // Northstar Ventures
+  const investor2Id = 'b0000000-0000-0000-0000-000000000002'; // Blue Horizon Capital
   const founder1Id = 'f0000000-0000-0000-0000-000000000001';  // Manmeet Singh (FarmSense owner)
   const founder2Id = 'f0000000-0000-0000-0000-000000000002';  // Riya Kapoor (Medora AI owner)
-  const unconnectedUserId = 'm0000000-0000-0000-0000-000000000001'; // Dr. Kavita Mehra
+  const unconnectedUserId = 'd0000000-0000-0000-0000-000000000001'; // Dr. Kavita Mehra
 
-  const startup1Id = 's0000000-0000-0000-0000-000000000001';  // FarmSense (founder1Id)
-  const startup2Id = 's0000000-0000-0000-0000-000000000002';  // TerraLoop
+  const startup1Id = 'e0000000-0000-0000-0000-000000000001';  // FarmSense (founder1Id)
+  const startup2Id = 'e0000000-0000-0000-0000-000000000002';  // TerraLoop
 
   const investor1Token = generateToken({ sub: investor1Id, role: 'investor', email: 'northstar@foundersden.test' });
   const investor2Token = generateToken({ sub: investor2Id, role: 'investor', email: 'bluehorizon@foundersden.test' });
@@ -25,6 +37,7 @@ describe('Iteration 7: Investor engagement, connections and messaging', () => {
   });
 
   describe('1. Watchlist and Private Notes Privacy', () => {
+
     it('allows an investor to add a startup to watchlist', async () => {
       const res = await request(app)
         .post(`/api/v1/watchlist/${startup1Id}`)

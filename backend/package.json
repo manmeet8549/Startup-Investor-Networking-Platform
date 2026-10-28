@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "db:migrate": "node dist/db/migrate.js",
+    "smoke:prod": "tsx src/scripts/smoke-prod.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
@@ -15,6 +20,7 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "db:reset": "tsx src/db/reset.ts",
     "db:seed": "tsx src/db/seed.ts",
+    "db:verify": "tsx src/db/verify.ts",
     "seed:demo": "tsx src/db/seed.ts"
   },
   "dependencies": {

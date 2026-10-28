@@ -24,13 +24,46 @@ import { config } from './config.js';
 
 export const app = express();
 
-// Security headers with Helmet
-app.use(helmet());
+// Trust reverse proxy (Render, Cloudflare, load balancers) so client IPs are accurate
+app.set('trust proxy', 1);
 
-// CORS configuration from environment variable
+// Security headers with Helmet
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+
+// Root endpoint and platform health checks
+app.all('/', (_req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'Founders Den Backend API',
+    version: '1.0.0',
+    health: '/health',
+    docs: '/api/docs',
+  });
+});
+
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
+
+// CORS configuration: exact matching without wildcards, credentials only for allowed origins
+const allowedOrigins = config.CORS_ORIGIN.split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: config.CORS_ORIGIN.split(',').map((o) => o.trim()),
+    origin: (origin, callback) => {
+      // Allow requests with no origin (curl, server-to-server, native mobile)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   })
 );

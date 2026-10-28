@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { config } from '../config.js';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 import { inMemoryDb } from '../db/index.js';
@@ -15,6 +16,18 @@ import {
 } from '../matching/score.js';
 
 describe('Iteration 6: Smart Matching & Investor Preferences', () => {
+  let origDbMode: boolean;
+  beforeAll(() => {
+    origDbMode = config.USE_IN_MEMORY_DB;
+    (config as any).USE_IN_MEMORY_DB = true;
+    (config as any).dbMode = 'in-memory';
+  });
+  afterAll(() => {
+    (config as any).USE_IN_MEMORY_DB = origDbMode;
+    (config as any).dbMode = origDbMode ? 'in-memory' : 'postgres';
+  });
+
+
   beforeEach(() => {
     inMemoryDb.reset();
   });
@@ -161,7 +174,7 @@ describe('Iteration 6: Smart Matching & Investor Preferences', () => {
   });
 
   describe('2. Investor Preferences API (Validation & Invalidation)', () => {
-    const investorId = 'i0000000-0000-0000-0000-000000000001';
+    const investorId = 'b0000000-0000-0000-0000-000000000001';
     const token = generateToken({ sub: investorId, email: 'northstar@foundersden.test', role: 'investor' });
 
     it('gets investor preferences', async () => {
@@ -234,7 +247,7 @@ describe('Iteration 6: Smart Matching & Investor Preferences', () => {
   describe('3. Matching Rankings: Seeded AgriTech MVP Ranks AgriTech Angel First', () => {
     const founderId = 'f0000000-0000-0000-0000-000000000001';
     const founderToken = generateToken({ sub: founderId, email: 'manmeet@foundersden.test', role: 'founder' });
-    const farmSenseId = 's0000000-0000-0000-0000-000000000001';
+    const farmSenseId = 'e0000000-0000-0000-0000-000000000001';
 
     it('ranks the AgriTech angel (Northstar Ventures) first for FarmSense', async () => {
       const res = await request(app)
@@ -246,8 +259,8 @@ describe('Iteration 6: Smart Matching & Investor Preferences', () => {
       expect(res.body.data.length).toBeGreaterThanOrEqual(1);
 
       const topMatch = res.body.data[0];
-      // Northstar Ventures is i0000000-0000-0000-0000-000000000001
-      expect(topMatch.investor.id).toBe('i0000000-0000-0000-0000-000000000001');
+      // Northstar Ventures is b0000000-0000-0000-0000-000000000001
+      expect(topMatch.investor.id).toBe('b0000000-0000-0000-0000-000000000001');
       expect(topMatch.investor.organization).toContain('Northstar');
       expect(topMatch.score).toBeGreaterThanOrEqual(80);
       expect(topMatch.disclaimer).toBe(MATCHING_DISCLAIMER);
@@ -321,7 +334,7 @@ describe('Iteration 6: Smart Matching & Investor Preferences', () => {
         .get(`/api/v1/matches/investors?startup_id=${farmSenseId}`)
         .set('Authorization', `Bearer ${founderToken}`);
 
-      expect(inMemoryDb.getCachedMatchScore('i0000000-0000-0000-0000-000000000001', farmSenseId)).not.toBeNull();
+      expect(inMemoryDb.getCachedMatchScore('b0000000-0000-0000-0000-000000000001', farmSenseId)).not.toBeNull();
 
       // 2. Founder updates startup profile (e.g. changes funding ask or sectors)
       await request(app)
@@ -332,12 +345,12 @@ describe('Iteration 6: Smart Matching & Investor Preferences', () => {
         });
 
       // 3. Verify match cache was invalidated
-      expect(inMemoryDb.getCachedMatchScore('i0000000-0000-0000-0000-000000000001', farmSenseId)).toBeNull();
+      expect(inMemoryDb.getCachedMatchScore('b0000000-0000-0000-0000-000000000001', farmSenseId)).toBeNull();
     });
   });
 
   describe('4. Investor Startup Discovery Matching', () => {
-    const investorId = 'i0000000-0000-0000-0000-000000000001';
+    const investorId = 'b0000000-0000-0000-0000-000000000001';
     const investorToken = generateToken({ sub: investorId, email: 'northstar@foundersden.test', role: 'investor' });
 
     it('GET /matches/startups returns ranked startups with score breakdown and disclaimer', async () => {

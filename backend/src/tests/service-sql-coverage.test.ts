@@ -11,17 +11,23 @@ import * as profileService from '../services/profile.service.js';
 describe('Iteration 10: Service SQL Branch Coverage', () => {
   let origNodeEnv: string;
   let origDbUrl: string | undefined;
+  let origUseInMemory: boolean;
 
   beforeEach(() => {
     origNodeEnv = config.NODE_ENV;
     origDbUrl = config.DATABASE_URL;
+    origUseInMemory = config.USE_IN_MEMORY_DB;
     (config as any).NODE_ENV = 'production';
     (config as any).DATABASE_URL = 'postgresql://mock:5432/test';
+    (config as any).USE_IN_MEMORY_DB = false;
+    (config as any).dbMode = 'postgres';
   });
 
   afterEach(() => {
     (config as any).NODE_ENV = origNodeEnv;
     (config as any).DATABASE_URL = origDbUrl;
+    (config as any).USE_IN_MEMORY_DB = origUseInMemory;
+    (config as any).dbMode = origUseInMemory ? 'in-memory' : 'postgres';
     vi.restoreAllMocks();
   });
 
@@ -480,6 +486,15 @@ describe('Iteration 10: Service SQL Branch Coverage', () => {
       const authService = await import('../services/auth.service.js');
 
       vi.spyOn(db, 'query').mockImplementation(async (text: string, params?: any[]) => {
+        if (text.includes('SELECT id, email FROM auth.users')) {
+          return {
+            rows: [{ id: params?.[0] || 'usr-new-sql', email: 'new.investor.sql@test.com' }] as any,
+            rowCount: 1,
+          };
+        }
+        if (text.includes('SELECT * FROM public.profiles WHERE id = $1 OR LOWER(email)')) {
+          return { rows: [] as any, rowCount: 0 };
+        }
         if (text.includes('SELECT * FROM public.profiles WHERE LOWER(email)')) {
           if (params?.[0] === 'new.investor.sql@test.com') {
             return { rows: [] as any, rowCount: 0 };

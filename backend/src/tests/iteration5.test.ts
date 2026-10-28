@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { config } from '../config.js';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 import { inMemoryDb } from '../db/index.js';
@@ -6,9 +7,20 @@ import { generateToken } from '../middleware/auth.middleware.js';
 import type { Startup } from '../db/schema.types.js';
 
 describe('Iteration 5: Discovery, Search, and Filters', () => {
+  let origDbMode: boolean;
+  beforeAll(() => {
+    origDbMode = config.USE_IN_MEMORY_DB;
+    (config as any).USE_IN_MEMORY_DB = true;
+    (config as any).dbMode = 'in-memory';
+  });
+  afterAll(() => {
+    (config as any).USE_IN_MEMORY_DB = origDbMode;
+    (config as any).dbMode = origDbMode ? 'in-memory' : 'postgres';
+  });
+
   const adminId = 'a0000000-0000-0000-0000-000000000001';
   const founderId = 'f0000000-0000-0000-0000-000000000001';
-  const investorId = 'i0000000-0000-0000-0000-000000000001';
+  const investorId = 'b0000000-0000-0000-0000-000000000001';
   const pendingInvestorId = 'u-pending-investor';
 
   const founderToken = generateToken({ sub: founderId, email: 'harpreet@foundersden.test', role: 'founder' });
@@ -147,6 +159,7 @@ describe('Iteration 5: Discovery, Search, and Filters', () => {
   });
 
   describe('Task 1 & 4: Discovery Listings & Access Rules', () => {
+
     it('allows unauthenticated callers to view public listed startups, but omits access-controlled and private ones', async () => {
       const res = await request(app).get('/api/v1/startups');
       expect(res.status).toBe(200);

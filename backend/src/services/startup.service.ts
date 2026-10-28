@@ -56,47 +56,42 @@ export async function createStartup(
   const completeness = computeProfileCompleteness(newStartup);
   newStartup.profile_completeness = completeness;
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
-    try {
-      const res = await query<Startup>(
-        `INSERT INTO public.startups
-          (id, founder_id, name, tagline, description, sector, sectors, stage, location,
-           funding_ask, currency, visibility, logo, problem, solution, target_market,
-           business_model, pitch_deck_url, website, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-         RETURNING *`,
-        [
-          newStartup.id,
-          newStartup.founder_id,
-          newStartup.name,
-          newStartup.tagline,
-          newStartup.description,
-          newStartup.sector,
-          newStartup.sectors,
-          newStartup.stage,
-          newStartup.location,
-          newStartup.funding_ask,
-          newStartup.currency,
-          newStartup.visibility,
-          newStartup.logo,
-          newStartup.problem,
-          newStartup.solution,
-          newStartup.target_market,
-          newStartup.business_model,
-          newStartup.pitch_deck_url,
-          newStartup.website,
-          newStartup.created_at,
-          newStartup.updated_at,
-        ]
-      );
-      if (res.rows.length > 0) {
-        const saved = res.rows[0];
-        saved.profile_completeness = computeProfileCompleteness(saved);
-        return saved;
-      }
-    } catch (err) {
-      logger.error({ err }, 'Failed to insert startup into PostgreSQL, falling back to inMemoryDb');
-    }
+  if (!config.USE_IN_MEMORY_DB) {
+    const res = await query<Startup>(
+      `INSERT INTO public.startups
+        (id, founder_id, name, tagline, description, sector, sectors, stage, location,
+         funding_ask, currency, visibility, logo, problem, solution, target_market,
+         business_model, pitch_deck_url, website, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+       RETURNING *`,
+      [
+        newStartup.id,
+        newStartup.founder_id,
+        newStartup.name,
+        newStartup.tagline,
+        newStartup.description,
+        newStartup.sector,
+        newStartup.sectors,
+        newStartup.stage,
+        newStartup.location,
+        newStartup.funding_ask,
+        newStartup.currency,
+        newStartup.visibility,
+        newStartup.logo,
+        newStartup.problem,
+        newStartup.solution,
+        newStartup.target_market,
+        newStartup.business_model,
+        newStartup.pitch_deck_url,
+        newStartup.website,
+        newStartup.created_at,
+        newStartup.updated_at,
+      ]
+    );
+    const saved = res.rows[0];
+    saved.profile_completeness = computeProfileCompleteness(saved);
+    inMemoryDb.createStartup(saved);
+    return saved;
   }
 
   inMemoryDb.createStartup(newStartup);
@@ -109,10 +104,11 @@ export async function getStartupById(
 ): Promise<StartupDiscoveryItem> {
   let startup: Startup | null = null;
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Startup>('SELECT * FROM public.startups WHERE id = $1 LIMIT 1', [id]);
     if (res.rows.length > 0) {
       startup = res.rows[0];
+      inMemoryDb.startups.set(startup.id, startup);
     }
   } else {
     startup = inMemoryDb.getStartupById(id);
@@ -144,7 +140,7 @@ export async function getStartupById(
       accessStatus = 'approved';
     } else {
       // Check document access requests for this user and startup
-      if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+      if (!config.USE_IN_MEMORY_DB) {
         const reqRes = await query<{ status: string }>(
           `SELECT status FROM public.document_access_requests
            WHERE requester_id = $1 AND startup_id = $2
@@ -193,9 +189,8 @@ export async function listStartups(
   data: StartupDiscoveryItem[];
   meta: { total: number; page: number; limit: number; total_pages: number };
 }> {
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
-    try {
-      const isVerified =
+  if (!config.USE_IN_MEMORY_DB) {
+    const isVerified =
         user &&
         (user.role === 'admin' ||
           user.verification_status === 'verified' ||
@@ -204,7 +199,7 @@ export async function listStartups(
       const conditions: string[] = [
         's.is_hidden = false',
         "p.status != 'suspended'",
-        "p.verification_status IN ('approved', 'verified')",
+        "p.verification_status = 'verified'",
         "s.visibility != 'private'",
       ];
       const params: any[] = [];
@@ -327,9 +322,6 @@ export async function listStartups(
           total_pages: Math.ceil(total / limit) || 1,
         },
       };
-    } catch (err) {
-      logger.error({ err }, 'Failed PostgreSQL listStartups query, falling back to inMemoryDb');
-    }
   }
 
   // Fallback to in-memory store
@@ -362,45 +354,41 @@ export async function listStartups(
 }
 
 export async function getFilterMetadata() {
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
-    try {
-      const sectorsRes = await query<{ sector: string; count: string }>(
-        `SELECT unnest(sectors) as sector, count(*)::text as count
-         FROM public.startups
-         WHERE is_hidden = false AND visibility != 'private'
-         GROUP BY sector
-         ORDER BY count(*) DESC`
-      );
-      const stagesRes = await query<{ stage: string; count: string }>(
-        `SELECT stage, count(*)::text as count
-         FROM public.startups
-         WHERE is_hidden = false AND visibility != 'private'
-         GROUP BY stage`
-      );
-      const locationsRes = await query<{ location: string; count: string }>(
-        `SELECT location, count(*)::text as count
-         FROM public.startups
-         WHERE is_hidden = false AND visibility != 'private' AND location IS NOT NULL AND location != ''
-         GROUP BY location
-         ORDER BY count(*) DESC`
-      );
+  if (!config.USE_IN_MEMORY_DB) {
+    const sectorsRes = await query<{ sector: string; count: string }>(
+      `SELECT s AS sector, count(*)::text as count
+       FROM public.startups, unnest(sectors) AS s
+       WHERE is_hidden = false AND visibility != 'private'
+       GROUP BY s
+       ORDER BY count(*) DESC`
+    );
+    const stagesRes = await query<{ stage: string; count: string }>(
+      `SELECT stage, count(*)::text as count
+       FROM public.startups
+       WHERE is_hidden = false AND visibility != 'private'
+       GROUP BY stage`
+    );
+    const locationsRes = await query<{ location: string; count: string }>(
+      `SELECT location, count(*)::text as count
+       FROM public.startups
+       WHERE is_hidden = false AND visibility != 'private' AND location IS NOT NULL AND location != ''
+       GROUP BY location
+       ORDER BY count(*) DESC`
+    );
 
-      const standardStages = ['idea', 'validation', 'mvp', 'early_traction', 'growth'];
-      const stagesMap = new Map(stagesRes.rows.map((r) => [r.stage, parseInt(r.count, 10)]));
-      const stages = standardStages.map((st) => ({
-        stage: st,
-        label: st.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        count: stagesMap.get(st) || 0,
-      }));
+    const standardStages = ['idea', 'validation', 'mvp', 'early_traction', 'growth'];
+    const stagesMap = new Map(stagesRes.rows.map((r) => [r.stage, parseInt(r.count, 10)]));
+    const stages = standardStages.map((st) => ({
+      stage: st,
+      label: st.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+      count: stagesMap.get(st) || 0,
+    }));
 
-      return {
-        sectors: sectorsRes.rows.map((r) => ({ sector: r.sector, count: parseInt(r.count, 10) })),
-        stages,
-        locations: locationsRes.rows.map((r) => ({ location: r.location, count: parseInt(r.count, 10) })),
-      };
-    } catch (err) {
-      logger.error({ err }, 'Failed to fetch metadata from PostgreSQL, falling back to inMemoryDb');
-    }
+    return {
+      sectors: sectorsRes.rows.map((r) => ({ sector: r.sector, count: parseInt(r.count, 10) })),
+      stages,
+      locations: locationsRes.rows.map((r) => ({ location: r.location, count: parseInt(r.count, 10) })),
+    };
   }
 
   return {
@@ -413,7 +401,7 @@ export async function getFilterMetadata() {
 export async function listMyStartups(founderId: string): Promise<Startup[]> {
   let list: Startup[] = [];
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Startup>(
       'SELECT * FROM public.startups WHERE founder_id = $1 ORDER BY created_at DESC',
       [founderId]
@@ -451,23 +439,20 @@ export async function updateStartup(
     updatedData.sector = updates.sectors[0];
   }
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
-    try {
-      const keys = Object.keys(updatedData);
-      const values = Object.values(updatedData);
-      const setClause = keys.map((k, idx) => `${k} = $${idx + 1}`).join(', ');
-      const res = await query<Startup>(
-        `UPDATE public.startups SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`,
-        [...values, id]
-      );
-      if (res.rows.length > 0) {
-        const saved = res.rows[0];
-        saved.profile_completeness = computeProfileCompleteness(saved);
-        return saved;
-      }
-    } catch (err) {
-      logger.error({ err }, 'Failed to update startup in PostgreSQL, updating inMemoryDb');
+  if (!config.USE_IN_MEMORY_DB) {
+    const keys = Object.keys(updatedData);
+    const values = Object.values(updatedData);
+    const setClause = keys.map((k, idx) => `${k} = $${idx + 1}`).join(', ');
+    const res = await query<Startup>(
+      `UPDATE public.startups SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`,
+      [...values, id]
+    );
+    if (res.rows.length === 0) {
+      throw new AppError('Startup not found', 404, 'NOT_FOUND');
     }
+    const saved = res.rows[0];
+    saved.profile_completeness = computeProfileCompleteness(saved);
+    return saved;
   }
 
   const result = inMemoryDb.updateStartup(id, updatedData);
@@ -489,7 +474,7 @@ export async function deleteStartup(
     throw new AppError('Only the startup owner or admin can delete this startup', 403, 'FORBIDDEN');
   }
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     await query('DELETE FROM public.startups WHERE id = $1', [id]);
   }
   inMemoryDb.deleteStartup(id);
@@ -524,31 +509,25 @@ export async function addTeamMember(
     updated_at: now,
   };
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
-    try {
-      const res = await query<StartupTeamMember>(
-        `INSERT INTO public.startup_team_members
-          (id, startup_id, user_id, name, role_title, email, is_primary, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING *`,
-        [
-          newMember.id,
-          newMember.startup_id,
-          newMember.user_id,
-          newMember.name,
-          newMember.role_title,
-          newMember.email,
-          newMember.is_primary,
-          newMember.created_at,
-          newMember.updated_at,
-        ]
-      );
-      if (res.rows.length > 0) {
-        return res.rows[0];
-      }
-    } catch (err) {
-      logger.error({ err }, 'Failed to insert team member to PostgreSQL, saving to inMemoryDb');
-    }
+  if (!config.USE_IN_MEMORY_DB) {
+    const res = await query<StartupTeamMember>(
+      `INSERT INTO public.startup_team_members
+        (id, startup_id, user_id, name, role_title, email, is_primary, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        newMember.id,
+        newMember.startup_id,
+        newMember.user_id,
+        newMember.name,
+        newMember.role_title,
+        newMember.email,
+        newMember.is_primary,
+        newMember.created_at,
+        newMember.updated_at,
+      ]
+    );
+    return res.rows[0];
   }
 
   return inMemoryDb.createTeamMember(newMember);
@@ -561,7 +540,7 @@ export async function listTeamMembers(
   // Ensure startup exists and user has view access
   await getStartupById(startupId, user);
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<StartupTeamMember>(
       'SELECT * FROM public.startup_team_members WHERE startup_id = $1 ORDER BY created_at ASC',
       [startupId]
@@ -585,7 +564,7 @@ export async function updateTeamMember(
     throw new AppError('Only the startup owner or admin can manage team members', 403, 'FORBIDDEN');
   }
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<StartupTeamMember>(
       `UPDATE public.startup_team_members
        SET name = COALESCE($1, name),
@@ -627,7 +606,7 @@ export async function deleteTeamMember(
     throw new AppError('Only the startup owner or admin can manage team members', 403, 'FORBIDDEN');
   }
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query(
       'DELETE FROM public.startup_team_members WHERE id = $1 AND startup_id = $2',
       [memberId, startupId]

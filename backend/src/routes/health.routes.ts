@@ -3,7 +3,7 @@ import { checkDatabaseConnection } from '../db/pool.js';
 
 export const healthRouter = Router();
 
-healthRouter.get('/health', async (_req, res) => {
+const checkDbHealth = async (_req: any, res: any) => {
   const dbHealth = await checkDatabaseConnection();
 
   if (!dbHealth.ok) {
@@ -32,4 +32,7 @@ healthRouter.get('/health', async (_req, res) => {
       version: '1.0.0',
     },
   });
-});
+};
+
+healthRouter.get('/health', checkDbHealth);
+healthRouter.get('/ready', checkDbHealth);

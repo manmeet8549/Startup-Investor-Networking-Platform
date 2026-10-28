@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { config } from '../config.js';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 import { inMemoryDb } from '../db/index.js';
@@ -7,13 +8,24 @@ import { computeProfileCompleteness } from '../services/completeness.service.js'
 import type { Startup } from '../db/schema.types.js';
 
 describe('Iteration 4: Startup profiles, pitch decks and access control', () => {
+  let origDbMode: boolean;
+  beforeAll(() => {
+    origDbMode = config.USE_IN_MEMORY_DB;
+    (config as any).USE_IN_MEMORY_DB = true;
+    (config as any).dbMode = 'in-memory';
+  });
+  afterAll(() => {
+    (config as any).USE_IN_MEMORY_DB = origDbMode;
+    (config as any).dbMode = origDbMode ? 'in-memory' : 'postgres';
+  });
+
   // Test User IDs from seed data
   const adminId = 'a0000000-0000-0000-0000-000000000001';
   const founderOwnerId = 'f0000000-0000-0000-0000-000000000001'; // Owns FarmSense
   const otherFounderId = 'f0000000-0000-0000-0000-000000000002'; // Owns Medora AI
-  const verifiedInvestorId = 'i0000000-0000-0000-0000-000000000001';
-  const pendingInvestorId = 'i0000000-0000-0000-0000-000000000002';
-  const mentorId = 'm0000000-0000-0000-0000-000000000001';
+  const verifiedInvestorId = 'b0000000-0000-0000-0000-000000000001';
+  const pendingInvestorId = 'b0000000-0000-0000-0000-000000000002';
+  const mentorId = 'd0000000-0000-0000-0000-000000000001';
   const incubatorId = 'c0000000-0000-0000-0000-000000000001';
 
   // Auth tokens
@@ -32,6 +44,7 @@ describe('Iteration 4: Startup profiles, pitch decks and access control', () => 
   // 1. UNIT TESTS: Profile Completeness Calculation
   // =========================================================================
   describe('Task 2: Unit tests for completeness calculation', () => {
+
     it('returns 0 for null, undefined, or empty object', () => {
       expect(computeProfileCompleteness(null)).toBe(0);
       expect(computeProfileCompleteness(undefined)).toBe(0);
@@ -143,7 +156,7 @@ describe('Iteration 4: Startup profiles, pitch decks and access control', () => 
     });
 
     it('allows only the owner or admin to PATCH startup', async () => {
-      const farmSenseId = 's0000000-0000-0000-0000-000000000001';
+      const farmSenseId = 'e0000000-0000-0000-0000-000000000001';
 
       // Non-owner founder attempts to update
       const forbiddenRes = await request(app)
@@ -173,7 +186,7 @@ describe('Iteration 4: Startup profiles, pitch decks and access control', () => 
     });
 
     it('allows only the owner or admin to DELETE startup', async () => {
-      const farmSenseId = 's0000000-0000-0000-0000-000000000001';
+      const farmSenseId = 'e0000000-0000-0000-0000-000000000001';
 
       // Non-owner attempts to delete
       const forbiddenRes = await request(app)
@@ -202,7 +215,7 @@ describe('Iteration 4: Startup profiles, pitch decks and access control', () => 
   // 3. TEAM MEMBER CRUD
   // =========================================================================
   describe('Task 1: Team Member CRUD', () => {
-    const farmSenseId = 's0000000-0000-0000-0000-000000000001';
+    const farmSenseId = 'e0000000-0000-0000-0000-000000000001';
 
     it('allows founder to add, list, update and delete team members', async () => {
       // 1. Add team member
@@ -364,7 +377,7 @@ describe('Iteration 4: Startup profiles, pitch decks and access control', () => 
   // 5. DOCUMENTS: Upload, File Validation, Versioning & Delete
   // =========================================================================
   describe('Task 3: Pitch decks and document versioning', () => {
-    const farmSenseId = 's0000000-0000-0000-0000-000000000001';
+    const farmSenseId = 'e0000000-0000-0000-0000-000000000001';
 
     it('rejects non-PDF uploads with 400 status', async () => {
       const res = await request(app)
@@ -436,7 +449,7 @@ describe('Iteration 4: Startup profiles, pitch decks and access control', () => 
   // =========================================================================
   describe('Task 4 & 5: Access requests, signed URLs & notifications', () => {
     it('controls access to access_controlled documents: refused before approval, refused after decline, approved allows 60s signed URL', async () => {
-      const farmSenseId = 's0000000-0000-0000-0000-000000000001';
+      const farmSenseId = 'e0000000-0000-0000-0000-000000000001';
       const samplePdfBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF');
 
       // Founder uploads an access-controlled pitch deck
@@ -527,7 +540,7 @@ describe('Iteration 4: Startup profiles, pitch decks and access control', () => 
     });
 
     it('enforces that unverified users cannot download public documents', async () => {
-      const farmSenseId = 's0000000-0000-0000-0000-000000000001';
+      const farmSenseId = 'e0000000-0000-0000-0000-000000000001';
       const samplePdfBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF');
 
       // Create a public document

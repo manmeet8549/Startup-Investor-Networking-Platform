@@ -1,10 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { config } from '../config.js';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../app.js';
 import { inMemoryDb } from '../db/index.js';
 import { generateToken } from '../middleware/auth.middleware.js';
 
 describe('Admin User & Verification API', () => {
+  let origDbMode: boolean;
+  beforeAll(() => {
+    origDbMode = config.USE_IN_MEMORY_DB;
+    (config as any).USE_IN_MEMORY_DB = true;
+    (config as any).dbMode = 'in-memory';
+  });
+  afterAll(() => {
+    (config as any).USE_IN_MEMORY_DB = origDbMode;
+    (config as any).dbMode = origDbMode ? 'in-memory' : 'postgres';
+  });
+
   const adminToken = generateToken({
     sub: 'a0000000-0000-0000-0000-000000000001',
     email: 'admin@foundersden.test',
@@ -117,7 +129,7 @@ describe('Admin User & Verification API', () => {
       expect(res.body.data.user.verification_status).toBe('verified');
 
       // Check DB directly
-      const profile = inMemoryDb.getProfileById('i0000000-0000-0000-0000-000000000001');
+      const profile = inMemoryDb.getProfileById('b0000000-0000-0000-0000-000000000001');
       expect(profile?.verification_status).toBe('verified');
     });
 

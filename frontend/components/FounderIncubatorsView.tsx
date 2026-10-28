@@ -79,7 +79,7 @@ export const FounderIncubatorsView: React.FC<FounderIncubatorsViewProps> = ({
   // Apply Modal State
   const [applyingProgram, setApplyingProgram] = useState<PublicProgramItem | null>(null);
   const [selectedStartupId, setSelectedStartupId] = useState<string>(
-    founderStartups[0]?.id || 's0000000-0000-0000-0000-000000000001'
+    founderStartups[0]?.id || 'e0000000-0000-0000-0000-000000000001'
   );
   const [pitchSummary, setPitchSummary] = useState('');
   const [submittingApplication, setSubmittingApplication] = useState(false);

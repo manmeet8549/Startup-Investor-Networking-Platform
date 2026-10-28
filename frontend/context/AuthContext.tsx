@@ -155,6 +155,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (input: SignUpInput): Promise<UserProfile> => {
     setError(null);
     try {
+      let activeToken: string | null = null;
+
       // 1. Create credential via Supabase Auth client if password provided
       if (input.password && input.password.length >= 6) {
         try {
@@ -168,26 +170,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               },
             },
           });
-          if (sbErr && !sbErr.message.includes('already registered')) {
-            console.warn('Supabase auth sign-up notice:', sbErr.message);
-          }
-          if (sbData.session?.access_token) {
-            setAuthToken(sbData.session.access_token);
+          if (sbData?.session?.access_token) {
+            activeToken = sbData.session.access_token;
+            setAuthToken(activeToken);
+          } else {
+            // If session not returned on signUp, sign in directly to retrieve access token
+            const { data: signInData } = await supabase.auth.signInWithPassword({
+              email: input.email,
+              password: input.password,
+            });
+            if (signInData?.session?.access_token) {
+              activeToken = signInData.session.access_token;
+              setAuthToken(activeToken);
+            }
           }
         } catch (sbEx) {
-          console.warn('Supabase sign-up attempt completed with notice:', sbEx);
+          console.warn('Supabase sign-up attempt notice:', sbEx);
         }
       }
 
       // 2. Register profile in Founders Den backend API
-      const res = await apiClient.post<{ user: UserProfile; profile: UserProfile; token: string }>(
-        '/auth/register-profile',
-        input
-      );
+      const token = activeToken || getAuthToken();
+      let res;
+      if (token) {
+        res = await apiClient.post<{ user: UserProfile; profile: UserProfile; token: string }>(
+          '/auth/register-profile',
+          input,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } else {
+        res = await apiClient.post<{ user: UserProfile; profile: UserProfile; token: string }>(
+          '/auth/signup',
+          input
+        );
+      }
 
       const registeredProfile = res.data.profile || res.data.user;
-      if (res.data.token) {
-        setAuthToken(res.data.token);
+      if (activeToken || res.data.token) {
+        setAuthToken(activeToken || res.data.token);
       }
 
       setUser(registeredProfile);

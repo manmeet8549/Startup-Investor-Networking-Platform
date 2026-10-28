@@ -28,7 +28,7 @@ export async function createReport(
     updated_at: now,
   };
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const sql = `
       INSERT INTO public.reports (id, reporter_id, target_type, target_id, reason, status, reviewed_by, resolution_notes, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -59,7 +59,7 @@ export async function listReports(params: ListReportsQuery): Promise<{
   const page = Math.max(1, params.page || 1);
   const limit = Math.min(100, Math.max(1, params.limit || 20));
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const conditions: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -121,7 +121,7 @@ export async function resolveReport(
 ): Promise<Report> {
   let existing: Report | null = null;
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Report>('SELECT * FROM public.reports WHERE id = $1 LIMIT 1', [reportId]);
     if (res.rows.length > 0) existing = res.rows[0];
   } else {
@@ -135,7 +135,7 @@ export async function resolveReport(
   const now = new Date().toISOString();
   const resolutionNote = note || 'Resolved by administrator';
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const sql = `
       UPDATE public.reports SET
         status = 'resolved',
@@ -167,7 +167,7 @@ export async function dismissReport(
 ): Promise<Report> {
   let existing: Report | null = null;
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const res = await query<Report>('SELECT * FROM public.reports WHERE id = $1 LIMIT 1', [reportId]);
     if (res.rows.length > 0) existing = res.rows[0];
   } else {
@@ -181,7 +181,7 @@ export async function dismissReport(
   const now = new Date().toISOString();
   const dismissalNote = note || 'Dismissed by administrator';
 
-  if (config.DATABASE_URL && config.NODE_ENV !== 'test') {
+  if (!config.USE_IN_MEMORY_DB) {
     const sql = `
       UPDATE public.reports SET
         status = 'dismissed',

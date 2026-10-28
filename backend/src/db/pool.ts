@@ -47,10 +47,19 @@ export async function query<T = unknown>(
   params?: unknown[]
 ): Promise<{ rows: T[]; rowCount: number }> {
   const start = Date.now();
-  const res = await pool.query(text, params);
-  const duration = Date.now() - start;
-  logger.debug({ text, duration, rows: res.rowCount }, 'Executed SQL query');
-  return { rows: res.rows as T[], rowCount: res.rowCount ?? 0 };
+  try {
+    const res = await pool.query(text, params);
+    const duration = Date.now() - start;
+    logger.debug({ text, duration, rows: res.rowCount }, 'Executed SQL query');
+    return { rows: res.rows as T[], rowCount: res.rowCount ?? 0 };
+  } catch (err: any) {
+    if (err.code === 'ECONNRESET' || err.code === '57P01' || err.code === 'ETIMEDOUT') {
+      logger.warn({ code: err.code }, 'Transient connection reset; retrying query once...');
+      const res = await pool.query(text, params);
+      return { rows: res.rows as T[], rowCount: res.rowCount ?? 0 };
+    }
+    throw err;
+  }
 }
 
 export async function closePool(): Promise<void> {
