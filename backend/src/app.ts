@@ -49,24 +49,41 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
-// CORS configuration: exact matching without wildcards, credentials only for allowed origins
-const allowedOrigins = config.CORS_ORIGIN.split(',')
+// CORS configuration: supports configured origins, all Vercel deployment domains (*.vercel.app), and localhost
+const configuredOrigins = config.CORS_ORIGIN.split(',')
   .map((o) => o.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (curl, server-to-server, native mobile)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(null, false);
-    },
-    credentials: true,
-  })
-);
+const isOriginAllowed = (origin: string): boolean => {
+  if (configuredOrigins.includes(origin)) return true;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.hostname.endsWith('.vercel.app')) return true;
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') return true;
+  } catch {
+    if (origin.endsWith('.vercel.app')) return true;
+  }
+  return false;
+};
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (isOriginAllowed(origin)) {
+      return callback(null, true);
+    }
+    logger.warn({ origin }, '[CORS] Blocked request from disallowed origin');
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'x-request-id'],
+  exposedHeaders: ['ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset'],
+  maxAge: 86400,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // JSON body limit (1MB max)
 app.use(express.json({ limit: '1mb' }));
